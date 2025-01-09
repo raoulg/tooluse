@@ -1,0 +1,21 @@
+[project]
+name = "tooluse"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "raoul grouls", email = "Raoul.Grouls@han.nl" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.42.0",
+    "ollama>=0.4.5",
+    "python-dotenv>=1.0.1",
+]
+
+[project.scripts]
+tooluse = "tooluse:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
