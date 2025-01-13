@@ -60,7 +60,7 @@ def calculator_tool(tool_use):
     return result
 
 
-def query(client: Anthropic, content: str, model: str, tools):
+def query(client: Anthropic, content: str, model: str, tools: list):
     response = client.messages.create(
         model=model,
         system="You have access to tools, but only use them when necessary. If a tool is not required, respond as normal",
@@ -95,14 +95,16 @@ def reaction(response) -> None:
 
 
 def main():
+    print("loading dotenv")
     load_dotenv()
     client = Anthropic()
     model = "claude-3-haiku-20240307"
     content = "Multiply 1984135 by 9343116. Only respond with the result"
     tools = [calculator_schema]
+    print("first query to calculator")
     response = query(client, content, model, tools)
     reaction(response)
-    content = "Give me a haiku about the disclosure of alien presence"
+    content = "Give me a haiku about a pet chicken"
     response = query(client, content, model, tools)
     reaction(response)
 
