@@ -1,42 +1,4 @@
-from ollama import ChatResponse, chat
-
-
-def add_two_numbers(a: int, b: int) -> int:
-    """
-    Add two numbers
-
-    Args:
-      a (int): The first number
-      b (int): The second number
-
-    Returns:
-      int: The sum of the two numbers
-    """
-    return a + b
-
-
-def subtract_two_numbers(a: int, b: int) -> int:
-    """
-    Subtract two numbers
-    """
-    return a - b
-
-
-subtract_two_numbers_tool = {
-    "type": "function",
-    "function": {
-        "name": "subtract_two_numbers",
-        "description": "Subtract two numbers",
-        "parameters": {
-            "type": "object",
-            "required": ["a", "b"],
-            "properties": {
-                "a": {"type": "integer", "description": "The first number"},
-                "b": {"type": "integer", "description": "The second number"},
-            },
-        },
-    },
-}
+from ollama import chat
 
 
 def reaction(response, messages, available_functions):
@@ -76,41 +38,3 @@ def reaction(response, messages, available_functions):
         final_response = chat("llama3.1", messages=messages)
         print("\nFinal response:", final_response.message.content)
         print("====\n")
-
-
-def main():
-    messages = [{"role": "user", "content": "What is three plus one?"}]
-    print("\nPrompt:", messages[0]["content"])
-
-    available_functions = {
-        "add_two_numbers": add_two_numbers,
-        "subtract_two_numbers": subtract_two_numbers,
-    }
-
-    response: ChatResponse = chat(
-        "llama3.1",
-        messages=messages,
-        tools=[add_two_numbers, subtract_two_numbers],
-    )
-    reaction(response, messages, available_functions)
-
-    messages = [
-        {
-            "role": "system",
-            "content": "You have access to tools, but only use them when necessary. If a tool is not required, respond as normal",
-        },
-        {
-            "role": "user",
-            "content": "Give me a haiku about the disclosure of alien presence",
-        },
-    ]
-    print("\nPrompt:", messages[0]["content"])
-    response: ChatResponse = chat(
-        "llama3.1",
-        messages=messages,
-    )
-    reaction(response, messages, available_functions)
-
-
-if __name__ == "__main__":
-    main()
