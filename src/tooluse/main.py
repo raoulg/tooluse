@@ -6,8 +6,9 @@ from loguru import logger
 
 from tooluse.calculator import add, subtract
 from tooluse.llm import LLMClient
+from tooluse.schemagenerators import BasicSchemaGenerator, LLMSchemaGenerator
 from tooluse.settings import ModelConfig
-from tooluse.tools import ToolFactory
+from tooluse.tools import Tool
 
 logger.remove()
 logger.add(sys.stderr, level="DEBUG")
@@ -16,25 +17,33 @@ logger.add("logs/logfile.log", level="DEBUG")
 
 def main():
     load_dotenv()
+    basic_generator = BasicSchemaGenerator()
+    basic_schema = basic_generator.generate_schema(add)
+    logger.info(f"basic schema: {basic_schema.to_dict()}")
+    config = ModelConfig.from_toml(Path("config.toml"))
+    llm = LLMClient(config)
+    generator = LLMSchemaGenerator(llm)
+    schema = generator.generate_schema(add)
+    logger.info(f"llm schema: {schema.to_dict()}")
     math_collection = [add, subtract]
-    # toollist = [Tool.from_function(f) for f in math_collection]
-    # logger.info(f"toollist: {toollist}")
+    toollist = [Tool.from_function(f) for f in math_collection]
+    logger.info(f"toollist: {toollist}")
     # toolcollection = ToolCollection.from_tools(toollist)
     # logger.info(f"collection: {toolcollection}")
     # logger.info(f"registry in collection {toolcollection._registry.available_tools}")
 
-    factory = ToolFactory()
-    tools = factory.create_collection(math_collection)
-    # logger.info(f"tools: {tools}")
-    schemas = tools.get_schemas()
-    logger.info(f"schemas: {schemas}")
-
-    config = ModelConfig.from_toml(Path("config.toml"))
-    llm = LLMClient(config)
-    content = "add 2 to 8. Only respond with the result"
-    messages = [{"role": "user", "content": content}]
-    response = llm(messages)
-    logger.info(f"response : {response}")
+    # factory = ToolFactory()
+    # tools = factory.create_collection(math_collection)
+    # # logger.info(f"tools: {tools}")
+    # schemas = tools.get_schemas()
+    # logger.info(f"schemas: {schemas}")
+    #
+    # config = ModelConfig.from_toml(Path("config.toml"))
+    # llm = LLMClient(config)
+    # content = "add 2 to 8. Only respond with the result"
+    # messages = [{"role": "user", "content": content}]
+    # response = llm(messages)
+    # logger.info(f"response : {response}")
     # model = "claude-3-haiku-20240307"
     # content = "Give me a haiku about a pet chicken"
 
