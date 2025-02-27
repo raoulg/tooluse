@@ -56,6 +56,7 @@ class LLMClient:
 
     def _ollama_call(self, messages, **kwargs) -> Any:
         assert isinstance(self.client, OllamaClient)
+        logger.debug(f"Calling Ollama :{self.config.model_type}")
         return self.client.chat(
             model=self.config.model_type, messages=messages, **kwargs
         )

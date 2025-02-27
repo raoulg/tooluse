@@ -50,7 +50,9 @@ Format your response as a JSON object with this structure:
             "additional_type_info": "any complex typing information"
         }
     }
-}""")
+}
+Respond with only this schema, and nothing else
+""")
 
 
 class ToolSchema:
@@ -79,6 +81,10 @@ class ToolSchema:
                 "required": self.required,
             },
         }
+
+    def __repr__(self) -> str:
+        dict_schema = self.to_dict()
+        return f"ToolSchema({dict_schema})"
 
     def to_json(self, indent: int = 2) -> str:
         """Convert to JSON string for easy viewing/editing"""
