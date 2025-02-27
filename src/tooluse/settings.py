@@ -14,6 +14,8 @@ class ClientType(str, Enum):
 class ModelType(str, Enum):
     HAIKU = "claude-3-haiku-20240307"
     LLAMA31 = "llama3.1"
+    CODELLAMA34B = "codellama:34b"
+    PHI3 = "phi3:latest"
 
 
 class ModelConfig(BaseModel):
@@ -24,7 +26,7 @@ class ModelConfig(BaseModel):
     max_tokens: int = 1000
 
     def __str__(self):
-        return f"client_type={self.client_type.value}\nmodel_type={self.model_type.value}\nhost={self.host}\nmax_tokens={self.max_tokens}"
+        return f"client_type={self.client_type.value}\nmodel_type={self.model_type.value}\ntools={self.allowed_tools}\nhost={self.host}\nmax_tokens={self.max_tokens}"
 
     @classmethod
     def from_toml(cls, path: Path):
