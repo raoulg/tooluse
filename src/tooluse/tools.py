@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from loguru import logger
+from pathlib import Path
 
 from tooluse.schemagenerators import (BasicSchemaGenerator, LLMSchemaGenerator,
                                       SchemaGenerator, ToolSchema)
@@ -29,12 +30,20 @@ class Tool:
     @classmethod
     def from_schema_dict(cls, func: Callable, schema_dict: Dict[str, Any]) -> "Tool":
         """Create a Tool from a function and a schema dictionary"""
-        schema = ToolSchema(
-            name=schema_dict["name"],
-            description=schema_dict["description"],
-            parameters=schema_dict["parameters"]["properties"],
-            required=schema_dict["parameters"]["required"],
-        )
+        try:
+            schema = ToolSchema(
+                name=schema_dict["name"],
+                description=schema_dict["description"],
+                parameters=schema_dict["parameters"],
+                required=schema_dict["required"],
+            )
+        except KeyError as e:
+            raise ValueError(f"Invalid schema dictionary: {e}")
+        return cls(func=func, schema=schema)
+
+    @classmethod
+    def from_schema_file(cls, func: Callable, schema_file: Path) -> "Tool":
+        schema = ToolSchema.from_file(schema_file)
         return cls(func=func, schema=schema)
 
     def get_schema_fmt(self, format: str) -> Union[Dict[str, Any], str]:
@@ -45,9 +54,15 @@ class Tool:
             return self.schema.to_dict()
         raise ValueError(f"Unsupported format: {format}")
 
-    def update_schema(self, schema_json: str) -> None:
+    def update_schema(self, schema_source: str) -> None:
         """Update the schema from a JSON string"""
-        self.schema = ToolSchema.from_json(schema_json)
+        if isinstance(schema_source, Path) or (isinstance(schema_source, str) and Path(schema_source).exists()):
+            # Treat as file path
+            path = Path(schema_source) if isinstance(schema_source, str) else schema_source
+            self.schema = ToolSchema.from_file(path)
+        else:
+            # Treat as JSON string
+            self.schema = ToolSchema.from_json(schema_source)
 
     def __call__(self, *args, **kwargs) -> Any:
         """Make the tool callable, delegating to the underlying function"""
@@ -138,18 +153,16 @@ class ToolCollection:
     """
 
     def __init__(self, tool_names: Optional[Set[str]]):
-        self._registry = ToolRegistry()
-        logger.debug(f"Registry in collection {self._registry.available_tools}")
         self.tool_names: Set[str] = tool_names or set()
 
         # Validate all tools exist in registry
-        # unknown = self.tool_names - self._registry.available_tools
-        # if unknown:
-        #     logger.warning("unkown tools")
-        #     logger.debug(f"available tools:{self._registry.available_tools}")
-        #     logger.debug(f"tool_names: {self.tool_names}")
-        #     raise ValueError(f"Unknown tools: {unknown}")
-        logger.debug(f"toolnames in collection: {self.tool_names}")
+        self._registry = ToolRegistry()
+        unknown = self.tool_names - self._registry.available_tools
+        if unknown:
+            logger.warning(f"unkown tools in collection: {unknown}")
+            logger.debug(f"available tools:{self._registry.available_tools}")
+            logger.debug(f"tool_names: {self.tool_names}")
+            raise ValueError(f"Unknown tools: {unknown}")
 
     @classmethod
     def from_tools(cls, tools: list["Tool"]) -> "ToolCollection":
