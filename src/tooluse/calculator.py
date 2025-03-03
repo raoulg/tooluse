@@ -44,13 +44,6 @@ def calculator_tool(tool_use):
 def add(x: float, y: float) -> float:
     """
     Add x plus y
-
-    Args:
-      x (float): The first number
-      y (float): The second number
-
-    Returns:
-      float: The sum of the two numbers
     """
     return x + y
 
