@@ -3,12 +3,8 @@ from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from loguru import logger
 
-from tooluse.schemagenerators import (
-    BasicSchemaGenerator,
-    LLMSchemaGenerator,
-    SchemaGenerator,
-    ToolSchema,
-)
+from tooluse.schemagenerators import (BasicSchemaGenerator, LLMSchemaGenerator,
+                                      SchemaGenerator, ToolSchema)
 
 
 @dataclass
@@ -41,11 +37,13 @@ class Tool:
         )
         return cls(func=func, schema=schema)
 
-    def get_schema(self, format: str = "dict") -> Union[Dict[str, Any], str]:
+    def get_schema_fmt(self, format: str) -> Union[Dict[str, Any], str]:
         """Get the schema in either dict or JSON format"""
         if format.lower() == "json":
             return self.schema.to_json()
-        return self.schema.to_dict()
+        if format.lower() == "dict":
+            return self.schema.to_dict()
+        raise ValueError(f"Unsupported format: {format}")
 
     def update_schema(self, schema_json: str) -> None:
         """Update the schema from a JSON string"""
@@ -123,6 +121,10 @@ class ToolRegistry:
             raise ValueError(f"Tool {name} not registered")
         return self._tools[name]
 
+    def reset(self) -> None:
+        """Clear all tools from the registry"""
+        self._tools = dict()
+
     @property
     def available_tools(self) -> Set[str]:
         """Names of all registered tools"""
@@ -165,11 +167,15 @@ class ToolCollection:
         """Returns list of tool functions"""
         return [self._registry.get(name) for name in self.tool_names]
 
-    def get_schemas(self) -> List[Dict[str, Any] | str]:
+    def get_schemas(self) -> List[ToolSchema]:
         """Returns list of tool schemas"""
         toolnames = [n for n in self.tool_names]
         logger.debug(f"toolnames: {toolnames}")
-        return [self._registry.get(name).get_schema() for name in toolnames]
+        return [self._registry.get(name).schema for name in toolnames]
+
+
+    def __getitem__(self, name: str) -> "Tool":
+        return self._registry.get(name)
 
     def __call__(self, tool: str, **kwargs) -> Any:
         """Execute a tool from this collection"""

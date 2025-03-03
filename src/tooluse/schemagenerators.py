@@ -4,83 +4,42 @@ from abc import ABC, abstractmethod
 from inspect import Parameter, getsource, signature
 from string import Template
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, get_type_hints
+from dataclasses import asdict, dataclass
 
 from loguru import logger
 
 if TYPE_CHECKING:
     from tooluse.llm import LLMClient
 
-# Template for each parameter's details
-PARAMETER_TEMPLATE = Template("""- ${name}:
-  Annotation: ${annotation}
-  Type hint: ${type_hint}
-  Default: ${default}
-  Parameter kind: ${kind}""")
 
-# Main prompt template
 SCHEMA_PROMPT_TEMPLATE = Template("""Given this Python function information:
-
-Function name: ${name}
-Signature: ${signature}
-Return type: ${return_type}
-
-Parameters:
-${param_details}
-
-${source_info}
-${doc_info}
-
+source: ${source}
 Basic schema: ${basic_schema}
 
-Please provide:
-1. A clear, detailed description of what this function does
-2. For each parameter, provide:
-   - A detailed description
-   - Any constraints or expectations
-   - Example values
-   - Any additional type information not captured in the basic schema
-
-Format your response as a JSON object with this structure:
+Please extend this with clear, detailed descriptions of what this function and each parameter does.
+respond with the following JSON schema:
 {
-    "description": "main function description",
-    "parameters": {
-        "param_name": {
-            "description": "detailed description",
-            "examples": ["example1", "example2"],
-            "additional_type_info": "any complex typing information"
-        }
-    }
+    'description': 'A clear, detailed description of what this function does',
+    'parameters': {
+        'param1': {
+            'description': 'A clear, detailed description of what this parameter does',
+        },
+    },
 }
-Respond with only this schema, and nothing else
+reply with the JSON schema only, and nothing else
 """)
 
 
+@dataclass
 class ToolSchema:
     """Represents the schema for a tool, following Anthropic's format"""
-
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        parameters: Dict[str, Any],
-        required: List[str],
-    ):
-        self.name = name
-        self.description = description
-        self.parameters = parameters
-        self.required = required
+    name: str
+    description: str
+    parameters: Dict[str, Any]
+    required: List[str]
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to Anthropic's expected format"""
-        return {
-            "name": self.name,
-            "description": self.description,
-            "parameters": {
-                "type": "object",
-                "properties": self.parameters,
-                "required": self.required,
-            },
-        }
+        return asdict(self)
 
     def __repr__(self) -> str:
         dict_schema = self.to_dict()
@@ -97,10 +56,133 @@ class ToolSchema:
         return cls(
             name=data["name"],
             description=data["description"],
-            parameters=data["parameters"]["properties"],
-            required=data["parameters"]["required"],
+            parameters=data["parameters"],
+            required=data["required"],
         )
 
+class LLMAdapter(ABC):
+    """Abstract base class for LLM client adapters."""
+
+    @classmethod
+    @abstractmethod
+    def format_schema(cls, toolschema: ToolSchema) -> Dict[str, Any]:
+        """Format tool schema for the specific LLM."""
+        pass
+
+    @classmethod
+    @abstractmethod
+    def append_message(cls, messages: List, response) -> List:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def extract_tool_calls(cls, response) -> List:
+        """Extract tool calls from LLM response."""
+        pass
+
+    @classmethod
+    @abstractmethod
+    def parse_tool_call(cls, tool) -> dict[str, Any]:
+        """Parse tool call to extract name and arguments."""
+        pass
+
+    @classmethod
+    @abstractmethod
+    def format_tool_response(cls, toolcall: dict, output) -> Dict[str, Any]:
+        """Format tool response for the LLM."""
+        pass
+
+class AnthropicAdapter(LLMAdapter):
+    @classmethod
+    def format_schema(cls, toolschema: ToolSchema) -> Dict[str, Any]:
+        return {
+            "name": toolschema.name,
+            "description": toolschema.description,
+            "input_schema": {
+                "type": "object",
+                "properties": toolschema.parameters,
+                "required": toolschema.required,
+            },
+        }
+
+    @classmethod
+    def append_message(cls, messages: List, response) -> List:
+        messages.append({"role": "assistant", "content": response.content})
+        return messages
+
+
+    @classmethod
+    def extract_tool_calls(cls, response) -> List:
+        if hasattr(response, "content"):
+            return [block for block in response.content
+                   if getattr(block, "type", None) == "tool_use"]
+        return []
+
+    @classmethod
+    def parse_tool_call(cls, tool) -> dict[str, Any]:
+        return {
+            "id" : tool.id,
+            "name" : tool.name,
+            "args": tool.input,
+        }
+
+    @classmethod
+    def format_tool_response(cls, toolcall: dict, output) -> Dict[str, Any]:
+        # TODO: add tool.id
+        return {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": toolcall["id"],
+                    "content": str(output),
+                }
+
+            ]
+        }
+
+
+class LlamaAdapter(LLMAdapter):
+    @classmethod
+    def format_schema(cls, toolschema: ToolSchema) -> Dict[str, Any]:
+        return {
+            "type": "function",
+            "function": {
+                "name": toolschema.name,
+                "description": toolschema.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": toolschema.parameters,
+                    "required": toolschema.required,
+                }
+            }
+        }
+
+    @classmethod
+    def append_message(cls, messages: List, response) -> List:
+        messages.append(response.message)
+        return messages
+
+    @classmethod
+    def extract_tool_calls(cls, response) -> List:
+        if hasattr(response.message, "tool_calls") and response.message.tool_calls:
+            return response.message.tool_calls
+        return []
+
+    @classmethod
+    def parse_tool_call(cls, tool) -> dict[str, Any]:
+        return {
+            "name" : tool.function.name,
+            "args": tool.function.arguments,
+        }
+
+    @classmethod
+    def format_tool_response(cls, toolcall: dict, output) -> Dict[str, Any]:
+        return {
+            "role": "tool",
+            "content": str(output),
+            "name": toolcall["name"],
+        }
 
 class SchemaGenerator(ABC):
     """Abstract base class for schema generators"""
@@ -118,7 +200,6 @@ class BasicSchemaGenerator(SchemaGenerator):
         float: {"type": "number"},
         str: {"type": "string"},
         bool: {"type": "boolean"},
-        # Add more type mappings as needed
     }
 
     def generate_schema(self, func: Callable) -> ToolSchema:
@@ -126,26 +207,32 @@ class BasicSchemaGenerator(SchemaGenerator):
         type_hints = get_type_hints(func)
 
         parameters = {}
+        logger.debug(f"Function signature: {sig}")
         required = []
 
         for name, param in sig.parameters.items():
             param_type = type_hints.get(name, Any)
+            logger.debug(f"Parameter {name}: {param_type}")
 
             # Skip self parameter for methods
             if name == "self":
                 continue
-
-            param_schema = self._TYPE_MAP.get(param_type, {"type": "string"})
+            # Inside generate_schema
+            # dict is necessary to avoid overwriting the typemap
+            param_schema = dict(self._TYPE_MAP.get(param_type, {"type": "string"}))
+            logger.debug(f"Parameter schema: {param_schema}")
 
             # Handle default values
             if param.default is Parameter.empty:
                 required.append(name)
 
             parameters[name] = param_schema
+            logger.debug(f"Parameters: {parameters}")
+
+        logger.debug(f"Parameters: {parameters}")
 
         # Get description from docstring
         description = inspect.getdoc(func) or f"Function {func.__name__}"
-
         return ToolSchema(
             name=func.__name__,
             description=description,
@@ -161,101 +248,40 @@ class LLMSchemaGenerator(SchemaGenerator):
         self.llm = llm_client
         self.basic_generator = BasicSchemaGenerator()
 
-    def get_function_info(self, func: Callable) -> dict:
-        """Gather all available function information"""
-        sig = signature(func)
-        type_hints = get_type_hints(func)
-
-        # Get detailed parameter info
-        param_details = []
-        for name, param in sig.parameters.items():
-            details = PARAMETER_TEMPLATE.substitute(
-                name=name,
-                annotation=str(param.annotation),
-                type_hint=str(type_hints.get(name, "No type hint")),
-                default="None" if param.default is param.empty else str(param.default),
-                kind=str(param.kind),
-            )
-            param_details.append(details)
-
-        info = {
-            "name": func.__name__,
-            "signature": str(sig),
-            "param_details": "\n".join(param_details),
-            "return_type": str(type_hints.get("return", "No return type hint")),
-        }
-
-        # Try to get source, but don't fail if we can't
-        try:
-            info["source_info"] = f"\nSource code:\n{getsource(func)}"
-        except (TypeError, OSError):
-            info["source_info"] = ""
-
-        # Add docstring if available
-        doc = func.__doc__ or ""
-        info["doc_info"] = f"\nDocumentation: {doc}" if doc else ""
-        logger.debug(f"Function info: {info}")
-
-        return info
-
     def generate_schema(self, func: Callable) -> ToolSchema:
         # First get basic schema for structure
         basic_schema = self.basic_generator.generate_schema(func)
-
-        # Get all available function info
-        info = self.get_function_info(func)
-        # Add basic schema to info
-        info["basic_schema"] = json.dumps(basic_schema.to_dict(), indent=2)
-
-        # Create prompt using template
-        content = SCHEMA_PROMPT_TEMPLATE.substitute(info)
-        messages = [{"role": "user", "content": content}]
-
         try:
-            response = self.llm(messages)
-
-            # Get response content
-            content = response.message.content
-
-            # Try to find and parse JSON from the response
+            source = getsource(func)
+            info = {"source": inspect.getsource(func), "basic_schema": basic_schema}
+            content = SCHEMA_PROMPT_TEMPLATE.substitute(info)
+            messages = [{"role": "user", "content": content}]
             try:
+                response = self.llm(messages)
+            except Exception as e:
+                logger.error(f"LLM call failed: {e}")
+                return basic_schema
+
+            try:
+                # TODO: add adapter for LLM response
+                content = response.message.content
                 enhanced = json.loads(content)
             except json.JSONDecodeError:
                 import re
-
                 json_match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
-                if not json_match:
-                    return basic_schema
                 enhanced = json.loads(json_match.group(1))
-
-            # Update schema while preserving types from basic schema
-            if "description" in enhanced:
-                basic_schema.description = enhanced["description"]
-
-            if "parameters" in enhanced:
-                for param_name, param_info in enhanced["parameters"].items():
-                    if param_name in basic_schema.parameters:
-                        # Start with original type information
-                        param_schema = basic_schema.parameters[param_name]
-
-                        # Add enhanced information
-                        param_schema.update(
-                            {
-                                "description": param_info.get("description", ""),
-                                "examples": param_info.get("examples", []),
-                            }
-                        )
-
-                        # Add any additional type information if provided
-                        if "additional_type_info" in param_info:
-                            param_schema["type_details"] = param_info[
-                                "additional_type_info"
-                            ]
-
-                        basic_schema.parameters[param_name] = param_schema
-
-            return basic_schema
-
+                if not enhanced:
+                    logger.warning("LLM enahncement failed, using basic schema")
+                    return basic_schema
+            try:
+                basic_schema.description = enhanced['description']
+                for key in enhanced['parameters'].keys():
+                    basic_schema.parameters[key]["description"] = enhanced['parameters'][key]['description']
+                return basic_schema
+            except KeyError as e:
+                logger.error(f"LLM response missing key: {e}")
+                return basic_schema
         except Exception as e:
-            print(f"LLM schema enhancement failed: {e}")
+            logger.error(f"Error generating schema: {e}")
             return basic_schema
+
