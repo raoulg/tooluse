@@ -60,12 +60,10 @@ class TestTool:
             "name": "custom_add",
             "description": "Custom add function",
             "parameters": {
-                "properties": {
                     "a": {"type": "number", "description": "First number"},
                     "b": {"type": "number", "description": "Second number"},
-                },
-                "required": ["a", "b"],
             },
+            "required": ["a", "b"],
         }
 
         tool = Tool.from_schema_dict(add, schema_dict)

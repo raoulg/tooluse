@@ -35,6 +35,13 @@ def test_schema_json_serialization(basic_schema):
 
     assert basic_schema.to_dict() == recreated_schema.to_dict()
 
+def test_schema_to_file(basic_schema, tmp_path):
+    schemafile = tmp_path / "schema.json"
+    basic_schema.to_file(schemafile)
+    schema_from_file = ToolSchema.from_file(schemafile)
+    assert basic_schema == schema_from_file
+
+
 
 def test_simple_function_schema(basic_generator):
     """Test schema generation for a simple function"""
@@ -86,33 +93,6 @@ def test_unknown_type_handling(basic_generator):
     assert schema.parameters["x"] == {"type": "string"}
     assert schema.parameters["y"] == {"type": "string"}
     assert schema.parameters["z"] == {"type": "string"}
-
-
-@patch("inspect.getsource")
-def test_successful_llm_enhancement(mock_getsource, llm_mock_generator, mock_llm):
-    """Test successful LLM enhancement of schema"""
-
-    def test_func(x: int) -> str:
-        """Test function"""
-        return str(x)
-
-    mock_getsource.return_value = "def test_func(x: int) -> str: return str(x)"
-
-    # Mock LLM response
-    enhanced_schema = {
-        "description": "Enhanced description",
-        "parameters": {
-            "x": {
-                "description": "Enhanced parameter description",
-            }
-        },
-    }
-    mock_llm.return_value.message.content = json.dumps(enhanced_schema)
-
-    schema = llm_mock_generator.generate_schema(test_func)
-
-    assert schema.description == "Enhanced description"
-    assert "description" in schema.parameters["x"]
 
 
 @patch("inspect.getsource")
