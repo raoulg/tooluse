@@ -6,6 +6,7 @@ from ollama import Client as OllamaClient
 
 from tooluse.settings import ClientType, ModelConfig
 from tooluse.tools import ToolCollection, ToolRegistry
+from tooluse.schemagenerators import LlamaAdapter, AnthropicAdapter
 
 
 class LLMClient:
@@ -32,6 +33,13 @@ class LLMClient:
             self.tools: ToolCollection = all_tools - excluded
             logger.debug(f"Allowed tools: {self.tools}")
 
+    def __repr__(self) -> str:
+        return f"LLMClient(model={self.config.model_type.value},\ntools={self.tools.tool_names})"
+
+    @property
+    def get_tools(self) -> ToolCollection:
+        return self.tools
+
     def _initialize_client(self):
         if self.config.client_type == ClientType.ANTHROPIC:
             if not self.config.max_tokens:
@@ -46,7 +54,7 @@ class LLMClient:
             raise ValueError(f"Unsupported client type: {self.config.client_type}")
 
     def _anthropic_call(self, messages, **kwargs) -> Any:
-        assert isinstance(self.client, Anthropic)
+        assert isinstance(self.client, Anthropic), f"Expected Anthropic, got {type(self.client)}"
         return self.client.messages.create(
             model=self.config.model_type.value,
             messages=messages,
@@ -55,7 +63,7 @@ class LLMClient:
         )
 
     def _ollama_call(self, messages, **kwargs) -> Any:
-        assert isinstance(self.client, OllamaClient)
+        assert isinstance(self.client, OllamaClient), f"Expected OllamaClient, got {self.client}"
         logger.debug(f"Calling Ollama :{self.config.model_type}")
         return self.client.chat(
             model=self.config.model_type, messages=messages, **kwargs
@@ -63,50 +71,62 @@ class LLMClient:
 
     def __call__(self, messages, **kwargs):
         if self.config.client_type == ClientType.ANTHROPIC:
+            adapter = AnthropicAdapter
+            schemas = self.tools.get_schemas()
+            tools = [adapter.format_schema(schema) for schema in schemas]
             return self._tool_loop(
                 call_func=self._anthropic_call,
                 messages=messages,
-                tools=self.tools.get_schemas(),
+                adapter=adapter,
+                tools=tools,
                 **kwargs,
             )
         elif self.config.client_type == ClientType.OLLAMA:
+            adapter = LlamaAdapter
+            schemas = self.tools.get_schemas()
+            tools = [adapter.format_schema(schema) for schema in schemas]
             return self._tool_loop(
                 self._ollama_call,
                 messages=messages,
-                tools=self.tools.get_schemas(),
+                adapter=adapter,
+                tools=tools,
                 **kwargs,
             )
         else:
             raise ValueError(f"Unsupported client type: {self.config.client_type}")
 
-    def _tool_loop(self, call_func, messages, **kwargs):
+    def _tool_loop(self, call_func, messages, adapter, **kwargs):
         try:
             logger.debug(f"received kwargs: {kwargs}")
             response = call_func(messages=messages, **kwargs)
-            logger.debug(f"Initial response: {response}")
+            logger.debug(f"response: {response}")
+            messages = adapter.append_message(messages, response)
+            logger.debug(f"appended: {messages}")
 
-            if hasattr(response.message, "tool_calls") and response.message.tool_calls:
-                for tool in response.message.tool_calls:
+            # Use the adapter to extract tool calls
+            tool_calls = adapter.extract_tool_calls(response)
+
+            if tool_calls:
+                for tool in tool_calls:
                     try:
-                        logger.debug(f"Executing tool: {tool.function.name}")
-                        if tool.function.name not in self.tools:
-                            logger.warning(f"Tool {tool.function.name} not registred")
+                        toolcall = adapter.parse_tool_call(tool)
+                        logger.debug(f"Executing tool: {toolcall['name']}")
 
-                        output = self.tools(
-                            tool.function.name, **tool.function.arguments
-                        )
-                        messages.append(
-                            {
-                                "role": "tool",
-                                "content": str(output),
-                                "name": tool.function.name,
-                            }
-                        )
+                        if toolcall["name"] not in self.tools:
+                            logger.warning(f"Tool {toolcall['name']} not registered")
+                            continue
+
+                        output = self.tools(toolcall["name"], **toolcall["args"])
+
+                        # Format tool response using the adapter
+                        tool_response = adapter.format_tool_response(toolcall, output)
+                        messages.append(tool_response)
+
                     except (AttributeError, ValueError) as e:
                         logger.error(f"Tool execution failed: {e}")
                         continue
-                logger.debug(f"Messages after tool calls: {messages}")
 
+                logger.debug(f"Messages after tool calls: {messages}")
                 response = call_func(messages=messages, **kwargs)
 
             return response
