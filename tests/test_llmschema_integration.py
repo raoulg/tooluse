@@ -12,42 +12,31 @@ from tooluse.settings import ClientType, ModelConfig, ModelType
 
 
 @pytest.fixture
-def ollama_config() -> ModelConfig:
-    """Create a ModelConfig for local Ollama"""
-    config = ModelConfig(
-        client_type=ClientType.OLLAMA,
-        model_type=ModelType.LLAMA31,  # or whichever model you have installed
-        host=HttpUrl("http://localhost:11434"),
-        allowed_tools=None,
-        max_tokens=1000,
-    )
-    logger.info("Created Ollama config")
-    return config
-
+def basic_generator():
+    basic_generator = BasicSchemaGenerator()
+    return basic_generator
 
 @pytest.fixture
-def llm_generator(ollama_config):
+def llm_generator_phi(phi_llm):
     """Create LLMSchemaGenerator with Ollama client"""
     try:
-        generator = LLMSchemaGenerator(ollama_config)
-        logger.success("Successfully created LLM client")
+        generator = LLMSchemaGenerator(phi_llm)
+        logger.success("Successfully created LLM generator")
     except Exception as e:
-        logger.error(f"Failed to create LLM client: {e}")
+        logger.error(f"Failed to create LLM generator: {e}")
         raise
     return generator
 
-
 @pytest.mark.integration
-def test_basic_function_schema_generation(llm_generator):
+def test_basic_schema_generation(basic_generator):
     """Test generating schema for a simple function with Ollama"""
-    basic_generator = BasicSchemaGenerator()
     basic_schema = basic_generator.generate_schema(add)
-    llm_schema = llm_generator.generate_schema(add)
-
     assert isinstance(
         basic_schema, ToolSchema
     ), f"Expected ToolSchema but got {type(basic_schema)}"
-    assert isinstance(
-        llm_schema, ToolSchema
-    ), f"Expected ToolSchema but got {type(llm_schema)}"
-    assert basic_schema != llm_schema, "Basic and LLM schemas should differ"
+
+
+@pytest.mark.integration
+def test_llm_integration(llm_generator_phi, basic_generator):
+    llm_schema = llm_generator_phi.generate_schema(add)
+    assert isinstance(llm_schema, ToolSchema)

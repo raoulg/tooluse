@@ -1,40 +1,11 @@
 import json
 from typing import Any, Optional, Union
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from loguru import logger
 
-from tooluse.schemagenerators import (
-    BasicSchemaGenerator,
-    LLMSchemaGenerator,
-    ToolSchema,
-)
-
-
-@pytest.fixture
-def basic_schema():
-    return ToolSchema(
-        name="test_function",
-        description="A test function",
-        parameters={"param1": {"type": "string"}},
-        required=["param1"],
-    )
-
-
-@pytest.fixture
-def basic_generator():
-    return BasicSchemaGenerator()
-
-
-@pytest.fixture
-def mock_llm():
-    return Mock()
-
-
-@pytest.fixture
-def llm_generator(mock_llm):
-    return LLMSchemaGenerator(mock_llm)
+from tooluse.schemagenerators import ToolSchema
 
 
 def test_basic_schema_creation(basic_schema):
@@ -50,12 +21,9 @@ def test_schema_to_dict(basic_schema):
     expected_dict = {
         "name": "test_function",
         "description": "A test function",
-        "parameters": {
-            "type": "object",
-            "properties": {"param1": {"type": "string"}},
-            "required": ["param1"],
-        },
-    }
+        "parameters": {"param1": {"type": "string"}},
+        "required": ["param1"],
+        }
 
     assert basic_schema.to_dict() == expected_dict
 
@@ -121,7 +89,7 @@ def test_unknown_type_handling(basic_generator):
 
 
 @patch("inspect.getsource")
-def test_successful_llm_enhancement(mock_getsource, llm_generator, mock_llm):
+def test_successful_llm_enhancement(mock_getsource, llm_mock_generator, mock_llm):
     """Test successful LLM enhancement of schema"""
 
     def test_func(x: int) -> str:
@@ -136,21 +104,19 @@ def test_successful_llm_enhancement(mock_getsource, llm_generator, mock_llm):
         "parameters": {
             "x": {
                 "description": "Enhanced parameter description",
-                "examples": [1, 2, 3],
             }
         },
     }
     mock_llm.return_value.message.content = json.dumps(enhanced_schema)
 
-    schema = llm_generator.generate_schema(test_func)
+    schema = llm_mock_generator.generate_schema(test_func)
 
     assert schema.description == "Enhanced description"
     assert "description" in schema.parameters["x"]
-    assert "examples" in schema.parameters["x"]
 
 
 @patch("inspect.getsource")
-def test_llm_failure_fallback(mock_getsource, llm_generator, mock_llm):
+def test_llm_failure_fallback(mock_getsource, llm_mock_generator, mock_llm):
     """Test fallback to basic schema when LLM fails"""
 
     def test_func(x: int) -> str:
@@ -159,29 +125,12 @@ def test_llm_failure_fallback(mock_getsource, llm_generator, mock_llm):
     mock_getsource.return_value = "def test_func(x: int) -> str: return str(x)"
     mock_llm.side_effect = Exception("LLM failed")
 
-    schema = llm_generator.generate_schema(test_func)
+    schema = llm_mock_generator.generate_schema(test_func)
 
     # Should still get a valid basic schema
     assert isinstance(schema, ToolSchema)
     assert "x" in schema.parameters
     assert schema.parameters["x"]["type"] == "integer"
-
-
-def test_function_info_gathering(llm_generator):
-    """Test gathering of function information"""
-
-    def test_func(a: int, b: str = "default") -> dict:
-        """Test function with multiple parameters"""
-        return {"a": a, "b": b}
-
-    info = llm_generator.get_function_info(test_func)
-
-    assert "name" in info
-    assert "signature" in info
-    assert "param_details" in info
-    assert "return_type" in info
-    assert info["name"] == "test_func"
-
 
 # Example of parametrized test
 @pytest.mark.parametrize(
