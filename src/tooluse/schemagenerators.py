@@ -5,8 +5,10 @@ from inspect import Parameter, getsource, signature
 from string import Template
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, get_type_hints
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 from loguru import logger
+from tooluse.settings import ClientType
 
 if TYPE_CHECKING:
     from tooluse.llm import LLMClient
@@ -19,10 +21,10 @@ Basic schema: ${basic_schema}
 Please extend this with clear, detailed descriptions of what this function and each parameter does.
 respond with the following JSON schema:
 {
-    'description': 'A clear, detailed description of what this function does',
-    'parameters': {
-        'param1': {
-            'description': 'A clear, detailed description of what this parameter does',
+    "description": "A clear, detailed description of what this function does",
+    "parameters": {
+        "param1": {
+            "description": "A clear, detailed description of what this parameter does",
         },
     },
 }
@@ -49,6 +51,16 @@ class ToolSchema:
         """Convert to JSON string for easy viewing/editing"""
         return json.dumps(self.to_dict(), indent=indent)
 
+    def to_file(self, file_path: Path, indent: int = 2) -> None:
+        """Write schema to a JSON file
+
+        Args:
+            file_path: Path where the JSON file will be saved
+            indent: Number of spaces for indentation in the JSON file
+        """
+        with file_path.open('w') as f:
+            f.write(self.to_json(indent=indent))
+
     @classmethod
     def from_json(cls, json_str: str) -> "ToolSchema":
         """Create schema from JSON string"""
@@ -60,6 +72,19 @@ class ToolSchema:
             required=data["required"],
         )
 
+    @classmethod
+    def from_file(cls, file_path: Path) -> "ToolSchema":
+        """Create schema from a JSON file
+        Args:
+            file_path: Path to the JSON file containing the schema
+
+        Returns:
+            A new ToolSchema instance with data from the file
+        """
+        with file_path.open('r') as f:
+            json_str = f.read()
+        return cls.from_json(json_str)
+
 class LLMAdapter(ABC):
     """Abstract base class for LLM client adapters."""
 
@@ -67,6 +92,12 @@ class LLMAdapter(ABC):
     @abstractmethod
     def format_schema(cls, toolschema: ToolSchema) -> Dict[str, Any]:
         """Format tool schema for the specific LLM."""
+        pass
+
+    @classmethod
+    @abstractmethod
+    def get_content(cls, response) -> str:
+        """Get content from LLM response."""
         pass
 
     @classmethod
@@ -110,6 +141,10 @@ class AnthropicAdapter(LLMAdapter):
         messages.append({"role": "assistant", "content": response.content})
         return messages
 
+    @classmethod
+    def get_content(cls, response) -> str:
+        return response.content
+
 
     @classmethod
     def extract_tool_calls(cls, response) -> List:
@@ -128,7 +163,6 @@ class AnthropicAdapter(LLMAdapter):
 
     @classmethod
     def format_tool_response(cls, toolcall: dict, output) -> Dict[str, Any]:
-        # TODO: add tool.id
         return {
             "role": "user",
             "content": [
@@ -157,6 +191,10 @@ class LlamaAdapter(LLMAdapter):
                 }
             }
         }
+
+    @classmethod
+    def get_content(cls, response) -> str:
+        return response.message.content
 
     @classmethod
     def append_message(cls, messages: List, response) -> List:
@@ -263,8 +301,14 @@ class LLMSchemaGenerator(SchemaGenerator):
                 return basic_schema
 
             try:
-                # TODO: add adapter for LLM response
-                content = response.message.content
+                adapter = None
+                if self.llm.config.client_type == ClientType.ANTHROPIC:
+                    adapter = AnthropicAdapter
+                elif self.llm.config.client_type == ClientType.OLLAMA:
+                    adapter = LlamaAdapter
+                if adapter is None:
+                    raise ValueError(f"Unsupported client type: {self.llm.config.client_type}")
+                content = adapter.get_content(response)
                 enhanced = json.loads(content)
             except json.JSONDecodeError:
                 import re
