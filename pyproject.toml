@@ -17,6 +17,11 @@ dependencies = [
 [project.scripts]
 tooluse = "tooluse:main"
 
+[project.optional-dependencies]
+demo = [
+    "sqlalchemy>=2.0.38",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
