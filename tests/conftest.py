@@ -6,12 +6,13 @@ import pytest
 from _pytest.logging import LogCaptureFixture
 from loguru import logger
 
+from tooluse.llm import LLMClient
 from tooluse.schemagenerators import (
     BasicSchemaGenerator,
     LLMSchemaGenerator,
+    ParameterSchema,
     ToolSchema,
 )
-from tooluse.llm import LLMClient
 from tooluse.settings import ClientType, ModelConfig, ModelType
 
 
@@ -46,10 +47,11 @@ def propagate_logs():
 
 @pytest.fixture
 def basic_schema():
+    param1 = ParameterSchema(name="param1", param_type="string")
     return ToolSchema(
         name="test_function",
         description="A test function",
-        parameters={"param1": {"type": "string"}},
+        parameters=[param1],
         required=["param1"],
     )
 
@@ -68,6 +70,7 @@ def mock_llm():
 def llm_mock_generator(mock_llm):
     return LLMSchemaGenerator(mock_llm)
 
+
 @pytest.fixture
 def ollama_config_phi() -> ModelConfig:
     """Create a ModelConfig for local Ollama"""
@@ -78,6 +81,7 @@ def ollama_config_phi() -> ModelConfig:
     )
     logger.info("Created Ollama config")
     return config
+
 
 @pytest.fixture
 def phi_llm(ollama_config_phi):

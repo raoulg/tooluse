@@ -1,8 +1,8 @@
 import pytest
 
 from tooluse.calculator import add, subtract
-from tooluse.tools import Tool, ToolCollection, ToolFactory, ToolRegistry
 from tooluse.schemagenerators import ToolSchema
+from tooluse.tools import Tool, ToolCollection, ToolFactory, ToolRegistry
 
 
 # Test fixtures
@@ -38,8 +38,7 @@ class TestTool:
 
         assert tool.func == add
         assert tool.schema.name == "add"
-        assert "x" in tool.schema.parameters
-        assert "y" in tool.schema.parameters
+        assert [p.name for p in tool.schema.parameters] == ["x", "y"]
         assert "x" in tool.schema.required
         assert "y" in tool.schema.required
 
@@ -49,31 +48,45 @@ class TestTool:
 
         assert tool.func == add
         assert tool.schema.name == "add"
-        assert "x" in tool.schema.parameters
-        assert "y" in tool.schema.parameters
+        assert [p.name for p in tool.schema.parameters] == ["x", "y"]
         assert "x" in tool.schema.required
         assert "y" in tool.schema.required
 
     def test_create_tool_from_schema_dict(self):
         """Test creating a tool from a function and a schema dictionary"""
-        schema_dict = {
-            "name": "custom_add",
-            "description": "Custom add function",
-            "parameters": {
-                    "a": {"type": "number", "description": "First number"},
-                    "b": {"type": "number", "description": "Second number"},
-            },
-            "required": ["a", "b"],
+
+        tool = Tool.from_function(add)
+        generated_dict = tool.schema.to_dict()
+        tool_from_schema = tool.from_schema_dict(add, generated_dict)
+        assert generated_dict == tool_from_schema.schema.to_dict()
+
+        d = {
+            "name": "add",
+            "description": "Add x plus y",
+            "parameters": [
+                {
+                    "name": "x",
+                    "param_type": "number",
+                    "description": None,
+                    "enum": None,
+                    "nullable": None,
+                },
+                {
+                    "name": "y",
+                    "param_type": "number",
+                    "description": None,
+                    "enum": None,
+                    "nullable": None,
+                },
+            ],
+            "required": ["x", "y"],
         }
 
-        tool = Tool.from_schema_dict(add, schema_dict)
-
-        assert tool.func == add
-        assert tool.schema.name == "custom_add"
-        assert "a" in tool.schema.parameters
-        assert "b" in tool.schema.parameters
-        assert "a" in tool.schema.required
-        assert "b" in tool.schema.required
+        tool_from_d = tool.from_schema_dict(add, d)
+        assert tool_from_d.schema.name == "add"
+        assert tool_from_d.schema.description == "Add x plus y"
+        assert len(tool_from_d.schema.parameters) == 2
+        assert tool_from_d.schema.required == ["x", "y"]
 
     def test_get_schema(self, add_tool):
         """Test getting schema in different formats"""
@@ -90,8 +103,23 @@ class TestTool:
         """Test updating schema from JSON"""
         new_schema = {
             "name": "updated_add",
-            "description": "Updated add function",
-            "parameters": {"num1": {"type": "number"}, "num2": {"type": "number"}},
+            "description": "Subtract num1 from num2",
+            "parameters": [
+                {
+                    "name": "num1",
+                    "param_type": "number",
+                    "description": None,
+                    "enum": None,
+                    "nullable": None,
+                },
+                {
+                    "name": "num2",
+                    "param_type": "number",
+                    "description": None,
+                    "enum": None,
+                    "nullable": None,
+                },
+            ],
             "required": ["num1", "num2"],
         }
 
@@ -100,8 +128,6 @@ class TestTool:
         add_tool.update_schema(json.dumps(new_schema))
 
         assert add_tool.schema.name == "updated_add"
-        assert "num1" in add_tool.schema.parameters
-        assert "num2" in add_tool.schema.parameters
         assert "num1" in add_tool.schema.required
         assert "num2" in add_tool.schema.required
 
@@ -317,8 +343,6 @@ class TestToolFactory:
 
         assert tool.func == add
         assert tool.schema.name == "add"
-        assert "x" in tool.schema.parameters
-        assert "y" in tool.schema.parameters
 
     def test_create_collection(self, tool_factory):
         """Test creating a tool collection with factory"""

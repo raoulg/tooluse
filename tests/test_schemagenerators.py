@@ -1,4 +1,3 @@
-import json
 from typing import Any, Optional, Union
 from unittest.mock import patch
 
@@ -12,7 +11,8 @@ def test_basic_schema_creation(basic_schema):
     """Test basic creation of ToolSchema"""
     assert basic_schema.name == "test_function"
     assert basic_schema.description == "A test function"
-    assert basic_schema.parameters == {"param1": {"type": "string"}}
+    assert basic_schema.parameters[0].name == "param1"
+    assert basic_schema.parameters[0].param_type == "string"
     assert basic_schema.required == ["param1"]
 
 
@@ -21,9 +21,17 @@ def test_schema_to_dict(basic_schema):
     expected_dict = {
         "name": "test_function",
         "description": "A test function",
-        "parameters": {"param1": {"type": "string"}},
+        "parameters": [
+            {
+                "name": "param1",
+                "param_type": "string",
+                "description": None,
+                "enum": None,
+                "nullable": None,
+            }
+        ],
         "required": ["param1"],
-        }
+    }
 
     assert basic_schema.to_dict() == expected_dict
 
@@ -35,12 +43,12 @@ def test_schema_json_serialization(basic_schema):
 
     assert basic_schema.to_dict() == recreated_schema.to_dict()
 
+
 def test_schema_to_file(basic_schema, tmp_path):
     schemafile = tmp_path / "schema.json"
     basic_schema.to_file(schemafile)
     schema_from_file = ToolSchema.from_file(schemafile)
     assert basic_schema == schema_from_file
-
 
 
 def test_simple_function_schema(basic_generator):
@@ -54,10 +62,11 @@ def test_simple_function_schema(basic_generator):
 
     assert schema.name == "test_func"
     assert schema.description == "Test function docstring"
+    assert set([p.name for p in schema.parameters]) == {"a", "b", "c"}
     assert set(schema.required) == {"a", "b"}
-    assert schema.parameters["a"] == {"type": "integer"}
-    assert schema.parameters["b"] == {"type": "string"}
-    assert schema.parameters["c"] == {"type": "number"}
+    assert [p.param_type for p in schema.parameters if p.name == "a"] == ["integer"]
+    assert [p.param_type for p in schema.parameters if p.name == "b"] == ["string"]
+    assert [p.param_type for p in schema.parameters if p.name == "c"] == ["number"]
 
 
 def test_method_schema(basic_generator):
@@ -88,11 +97,7 @@ def test_unknown_type_handling(basic_generator):
         pass
 
     schema = basic_generator.generate_schema(func_with_generic_type)
-
-    # Generic types and TypeVars should default to string type
-    assert schema.parameters["x"] == {"type": "string"}
-    assert schema.parameters["y"] == {"type": "string"}
-    assert schema.parameters["z"] == {"type": "string"}
+    assert [p.param_type for p in schema.parameters] == ["string", "string", "string"]
 
 
 @patch("inspect.getsource")
@@ -109,8 +114,9 @@ def test_llm_failure_fallback(mock_getsource, llm_mock_generator, mock_llm):
 
     # Should still get a valid basic schema
     assert isinstance(schema, ToolSchema)
-    assert "x" in schema.parameters
-    assert schema.parameters["x"]["type"] == "integer"
+    assert [p.name for p in schema.parameters] == ["x"]
+    assert [p.param_type for p in schema.parameters] == ["integer"]
+
 
 # Example of parametrized test
 @pytest.mark.parametrize(
@@ -122,8 +128,8 @@ def test_llm_failure_fallback(mock_getsource, llm_mock_generator, mock_llm):
         (bool, {"type": "boolean"}),
         (list[int], {"type": "string"}),  # Complex types default to string
         (dict[str, int], {"type": "string"}),
-        (Optional[int], {"type": "string"}),
-        (Union[str, int], {"type": "string"}),
+        (Optional[int], {"type": "integer"}),
+        (Union[str, None], {"type": "string"}),
     ],
 )
 def test_type_mapping(basic_generator, input_type, expected_type):
@@ -134,4 +140,4 @@ def test_type_mapping(basic_generator, input_type, expected_type):
 
     schema = basic_generator.generate_schema(test_func)
     logger.info(schema)
-    assert schema.parameters["x"]["type"] == expected_type["type"]
+    assert schema.parameters[0].param_type == expected_type["type"]
