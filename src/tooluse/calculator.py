@@ -45,6 +45,9 @@ def add(x: float, y: float) -> float:
     """
     Add x plus y
     """
+    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+        x = float(x)
+        y = float(y)
     return x + y
 
 
