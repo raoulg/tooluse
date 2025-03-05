@@ -2,7 +2,7 @@ import inspect
 import json
 from abc import ABC, abstractmethod
 from enum import Enum
-from inspect import Parameter, getsource, signature
+from inspect import Parameter, signature
 from pathlib import Path
 from string import Template
 from typing import (
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 SCHEMA_PROMPT_TEMPLATE = Template("""Given this Python function information:
 source: ${source}
 Basic schema: ${basic_schema}
+docs: ${docs}
 
 Please extend this with clear, detailed descriptions of what this function and each parameter does.
 respond with the following JSON schema:
@@ -378,8 +379,11 @@ class LLMSchemaGenerator(SchemaGenerator):
         # First get basic schema for structure
         basic_schema = self.basic_generator.generate_schema(func)
         try:
-            source = getsource(func)
-            info = {"source": inspect.getsource(func), "basic_schema": basic_schema}
+            info = {
+                "source": inspect.getsource(func),
+                "basic_schema": basic_schema,
+                "docs": self.basic_generator._get_function_doc(func),
+            }
             content = SCHEMA_PROMPT_TEMPLATE.substitute(info)
             messages = [{"role": "user", "content": content}]
             try:
@@ -403,17 +407,21 @@ class LLMSchemaGenerator(SchemaGenerator):
             except json.JSONDecodeError:
                 import re
 
+                enhanced = None
                 json_match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
-                enhanced = json.loads(json_match.group(1))
+                if json_match:
+                    enhanced = json.loads(json_match.group(1))
                 if not enhanced:
                     logger.warning("LLM enahncement failed, using basic schema")
+                    logger.debug(f"got content: {content}")
                     return basic_schema
             try:
                 basic_schema.description = enhanced["description"]
-                for key in enhanced["parameters"].keys():
-                    basic_schema.parameters[key]["description"] = enhanced[
-                        "parameters"
-                    ][key]["description"]
+                for param in basic_schema.parameters:
+                    if param.name in enhanced["parameters"]:
+                        param.description = enhanced["parameters"][param.name][
+                            "description"
+                        ]
                 return basic_schema
             except KeyError as e:
                 logger.error(f"LLM response missing key: {e}")
