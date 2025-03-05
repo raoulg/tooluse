@@ -4,9 +4,9 @@ from anthropic import Anthropic
 from loguru import logger
 from ollama import Client as OllamaClient
 
+from tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
 from tooluse.settings import ClientType, ModelConfig
 from tooluse.tools import ToolCollection, ToolRegistry
-from tooluse.schemagenerators import LlamaAdapter, AnthropicAdapter
 
 
 class LLMClient:
@@ -54,7 +54,9 @@ class LLMClient:
             raise ValueError(f"Unsupported client type: {self.config.client_type}")
 
     def _anthropic_call(self, messages, **kwargs) -> Any:
-        assert isinstance(self.client, Anthropic), f"Expected Anthropic, got {type(self.client)}"
+        assert isinstance(
+            self.client, Anthropic
+        ), f"Expected Anthropic, got {type(self.client)}"
         return self.client.messages.create(
             model=self.config.model_type.value,
             messages=messages,
@@ -63,7 +65,9 @@ class LLMClient:
         )
 
     def _ollama_call(self, messages, **kwargs) -> Any:
-        assert isinstance(self.client, OllamaClient), f"Expected OllamaClient, got {self.client}"
+        assert isinstance(
+            self.client, OllamaClient
+        ), f"Expected OllamaClient, got {self.client}"
         logger.debug(f"Calling Ollama :{self.config.model_type}")
         return self.client.chat(
             model=self.config.model_type, messages=messages, **kwargs
@@ -97,21 +101,26 @@ class LLMClient:
 
     def _tool_loop(self, call_func, messages, adapter, **kwargs):
         try:
-            logger.debug(f"received kwargs: {kwargs}")
             response = call_func(messages=messages, **kwargs)
-            logger.debug(f"response: {response}")
             messages = adapter.append_message(messages, response)
-            logger.debug(f"appended: {messages}")
 
             # Use the adapter to extract tool calls
             tool_calls = adapter.extract_tool_calls(response)
 
             if tool_calls:
                 for tool in tool_calls:
+                    toolcall = adapter.parse_tool_call(tool)
+                    for p in self.tools[toolcall["name"]].schema.parameters:
+                        if (
+                            p.name in toolcall["args"]
+                            and p.nullable
+                            and toolcall["args"][p.name] in [None, "", "null", "None"]
+                        ):
+                            toolcall["args"][p.name] = None
+                    logger.debug(
+                        f"Executing tool: {toolcall['name']} with {toolcall['args']}"
+                    )
                     try:
-                        toolcall = adapter.parse_tool_call(tool)
-                        logger.debug(f"Executing tool: {toolcall['name']}")
-
                         if toolcall["name"] not in self.tools:
                             logger.warning(f"Tool {toolcall['name']} not registered")
                             continue
@@ -124,6 +133,8 @@ class LLMClient:
 
                     except (AttributeError, ValueError) as e:
                         logger.error(f"Tool execution failed: {e}")
+                        tool_response = adapter.format_tool_response(toolcall, e)
+                        messages.append(tool_response)
                         continue
 
                 logger.debug(f"Messages after tool calls: {messages}")
@@ -133,3 +144,4 @@ class LLMClient:
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
             raise
+
