@@ -1,11 +1,15 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from loguru import logger
-from pathlib import Path
 
-from tooluse.schemagenerators import (BasicSchemaGenerator, LLMSchemaGenerator,
-                                      SchemaGenerator, ToolSchema)
+from tooluse.schemagenerators import (
+    BasicSchemaGenerator,
+    LLMSchemaGenerator,
+    SchemaGenerator,
+    ToolSchema,
+)
 
 
 @dataclass
@@ -54,12 +58,10 @@ class Tool:
             return self.schema.to_dict()
         raise ValueError(f"Unsupported format: {format}")
 
-    def update_schema(self, schema_source: str) -> None:
+    def update_schema(self, schema_source: str | Path) -> None:
         """Update the schema from a JSON string"""
-        if isinstance(schema_source, Path) or (isinstance(schema_source, str) and Path(schema_source).exists()):
-            # Treat as file path
-            path = Path(schema_source) if isinstance(schema_source, str) else schema_source
-            self.schema = ToolSchema.from_file(path)
+        if isinstance(schema_source, Path):
+            self.schema = ToolSchema.from_file(schema_source)
         else:
             # Treat as JSON string
             self.schema = ToolSchema.from_json(schema_source)
@@ -96,7 +98,7 @@ class Tool:
     def __hash__(self) -> int:
         """Hash based on function and schema since those determine equality"""
         params_tuple = tuple(
-            sorted((k, str(v)) for k, v in self.schema.parameters.items())
+            sorted((p.name, str(p.param_type)) for p in self.schema.parameters)
         )
         required_tuple = tuple(sorted(self.schema.required))
         return hash((self.func, params_tuple, required_tuple))
@@ -125,7 +127,6 @@ class ToolRegistry:
     def register(self, tool: "Tool") -> None:
         """Register a single tool"""
         key = str(tool)
-        logger.debug(f"Adding to registry {key}")
         self._tools[key] = tool
 
     def get(self, name: str) -> "Tool":
@@ -183,9 +184,7 @@ class ToolCollection:
     def get_schemas(self) -> List[ToolSchema]:
         """Returns list of tool schemas"""
         toolnames = [n for n in self.tool_names]
-        logger.debug(f"toolnames: {toolnames}")
         return [self._registry.get(name).schema for name in toolnames]
-
 
     def __getitem__(self, name: str) -> "Tool":
         return self._registry.get(name)
@@ -239,11 +238,15 @@ class ToolFactory:
         if not self.schema_generator:
             self.schema_generator = BasicSchemaGenerator()
 
-    def create_tool(self, func: Callable) -> Tool:
-        """Create a single tool"""
+    def create_tool(self, func: Union[Callable, Tool]) -> Tool:
+        """Create a single tool or return it if already a Tool"""
+        if isinstance(func, Tool):
+            return func
         return Tool.from_function(func, self.schema_generator)
 
-    def create_collection(self, functions: List[Callable]) -> ToolCollection:
-        """Create a ToolCollection from a list of functions"""
+    def create_collection(
+        self, functions: List[Union[Callable, Tool]]
+    ) -> ToolCollection:
+        """Create a ToolCollection from a list of functions or Tools"""
         tools = [self.create_tool(func) for func in functions]
         return ToolCollection.from_tools(tools)
