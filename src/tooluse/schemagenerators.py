@@ -5,8 +5,18 @@ from enum import Enum
 from inspect import Parameter, signature
 from pathlib import Path
 from string import Template
-from typing import (TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union,
-                    get_args, get_origin, get_type_hints)
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from loguru import logger
 from pydantic import BaseModel

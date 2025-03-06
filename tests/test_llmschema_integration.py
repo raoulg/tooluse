@@ -16,6 +16,7 @@ def basic_generator():
     basic_generator = BasicSchemaGenerator()
     return basic_generator
 
+
 @pytest.fixture
 def llm_generator_phi(phi_llm):
     """Create LLMSchemaGenerator with Ollama client"""
@@ -27,13 +28,14 @@ def llm_generator_phi(phi_llm):
         raise
     return generator
 
+
 @pytest.mark.integration
 def test_basic_schema_generation(basic_generator):
     """Test generating schema for a simple function with Ollama"""
     basic_schema = basic_generator.generate_schema(add)
-    assert isinstance(
-        basic_schema, ToolSchema
-    ), f"Expected ToolSchema but got {type(basic_schema)}"
+    assert isinstance(basic_schema, ToolSchema), (
+        f"Expected ToolSchema but got {type(basic_schema)}"
+    )
 
 
 @pytest.mark.integration

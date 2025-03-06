@@ -125,13 +125,12 @@ if __name__ == "__main__":
     )
     llm = LLMClient(config)
 
-
     queries = [
         "How many products do we have in total?",
         "I have a budget of 700,-, which Phones are available?",
         "How many products are there below 400,-?",
         "I am thinking about getting something nice for myself. I want to spend about 500,-. What combinations of products are available so i get to a total of 500,-?",
-        "what is 2345 plus 578932?"
+        "what is 2345 plus 578932?",
     ]
 
     # adapter per model
@@ -145,7 +144,6 @@ if __name__ == "__main__":
         messages = [{"role": "user", "content": query}]
         response = llm(messages)
         logger.info(adapter.get_content(response))
-        logger.info("="*60)
+        logger.info("=" * 60)
     engine.dispose()
     os.remove("simple_inventory.db")
-

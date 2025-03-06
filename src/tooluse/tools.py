@@ -4,8 +4,12 @@ from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from loguru import logger
 
-from tooluse.schemagenerators import (BasicSchemaGenerator, LLMSchemaGenerator,
-                                      SchemaGenerator, ToolSchema)
+from tooluse.schemagenerators import (
+    BasicSchemaGenerator,
+    LLMSchemaGenerator,
+    SchemaGenerator,
+    ToolSchema,
+)
 
 
 @dataclass
@@ -117,7 +121,7 @@ class ToolRegistry:
             # Use WeakValueDictionary to allow tool cleanup if no references remain
             # BUG: WeakValue cleans out when used in factory?
             # Using dict for now
-            self._tools = dict()
+            self._tools: Dict = {}
             self.initialized = True
 
     def register(self, tool: "Tool") -> None:
@@ -135,7 +139,7 @@ class ToolRegistry:
 
     def reset(self) -> None:
         """Clear all tools from the registry"""
-        self._tools = dict()
+        self._tools = {}
 
     @property
     def available_tools(self) -> Set[str]:
@@ -179,8 +183,7 @@ class ToolCollection:
 
     def get_schemas(self) -> List[ToolSchema]:
         """Returns list of tool schemas"""
-        toolnames = [n for n in self.tool_names]
-        return [self._registry.get(name).schema for name in toolnames]
+        return [self._registry.get(name).schema for name in list(self.tool_names)]
 
     def __getitem__(self, name: str) -> "Tool":
         return self._registry.get(name)
