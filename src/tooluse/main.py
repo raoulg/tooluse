@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -9,6 +8,7 @@ from tooluse.llm import LLMClient
 from tooluse.schemagenerators import BasicSchemaGenerator, LLMSchemaGenerator
 from tooluse.settings import ModelConfig
 from tooluse.tools import Tool, ToolCollection, ToolFactory
+
 
 def main():
     load_dotenv()

@@ -54,9 +54,9 @@ class LLMClient:
             raise ValueError(f"Unsupported client type: {self.config.client_type}")
 
     def _anthropic_call(self, messages, **kwargs) -> Any:
-        assert isinstance(
-            self.client, Anthropic
-        ), f"Expected Anthropic, got {type(self.client)}"
+        assert isinstance(self.client, Anthropic), (
+            f"Expected Anthropic, got {type(self.client)}"
+        )
         return self.client.messages.create(
             model=self.config.model_type.value,
             messages=messages,
@@ -65,9 +65,9 @@ class LLMClient:
         )
 
     def _ollama_call(self, messages, **kwargs) -> Any:
-        assert isinstance(
-            self.client, OllamaClient
-        ), f"Expected OllamaClient, got {self.client}"
+        assert isinstance(self.client, OllamaClient), (
+            f"Expected OllamaClient, got {self.client}"
+        )
         logger.debug(f"Calling Ollama :{self.config.model_type}")
         return self.client.chat(
             model=self.config.model_type, messages=messages, **kwargs
@@ -144,4 +144,3 @@ class LLMClient:
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
             raise
-

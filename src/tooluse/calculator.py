@@ -1,4 +1,4 @@
-def calculator(operation, operand1, operand2):
+def calculator(operation: str, operand1: float, operand2: float) -> float:
     if operation == "add":
         return operand1 + operand2
     elif operation == "subtract":
@@ -32,15 +32,6 @@ calculator_schema = {
 }
 
 
-def calculator_tool(tool_use):
-    tool_inputs = tool_use.input
-    operation = tool_inputs["operation"]
-    operand1 = tool_inputs["operand1"]
-    operand2 = tool_inputs["operand2"]
-    result = calculator(operation, operand1, operand2)
-    return result
-
-
 def add(x: float, y: float) -> float:
     """
     Add x plus y
@@ -56,20 +47,3 @@ def subtract(x: float, y: float) -> float:
     Subtract y from x
     """
     return x - y
-
-
-subtract_two_numbers_tool = {
-    "type": "function",
-    "function": {
-        "name": "subtract_two_numbers",
-        "description": "Subtract two numbers",
-        "parameters": {
-            "type": "object",
-            "required": ["a", "b"],
-            "properties": {
-                "a": {"type": "integer", "description": "The first number"},
-                "b": {"type": "integer", "description": "The second number"},
-            },
-        },
-    },
-}

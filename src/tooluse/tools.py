@@ -4,12 +4,8 @@ from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from loguru import logger
 
-from tooluse.schemagenerators import (
-    BasicSchemaGenerator,
-    LLMSchemaGenerator,
-    SchemaGenerator,
-    ToolSchema,
-)
+from tooluse.schemagenerators import (BasicSchemaGenerator, LLMSchemaGenerator,
+                                      SchemaGenerator, ToolSchema)
 
 
 @dataclass
