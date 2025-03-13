@@ -14,7 +14,7 @@ from tooluse.settings import ClientType, ModelConfig, ModelType
 from tooluse.tools import ToolFactory
 
 logger.remove()
-logger.add(sys.stderr, level="DEBUG")
+logger.add(sys.stderr, level="INFO")
 
 engine = create_engine("sqlite:///simple_inventory.db", echo=False)
 Base = declarative_base()
