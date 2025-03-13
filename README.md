@@ -45,6 +45,8 @@ print(response.message.content)
 # >>> The answer is: 802582
 ```
 
+Or, run the demo with `python demo/database_example.py` to see a more complex example in action.
+
 ### Using with Different LLM Providers
 
 The package supports different LLM providers:
