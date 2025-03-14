@@ -1,12 +1,11 @@
 from typing import Any
 
 from anthropic import Anthropic
+from llm_tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
+from llm_tooluse.settings import ClientType, ModelConfig
+from llm_tooluse.tools import ToolCollection, ToolRegistry
 from loguru import logger
 from ollama import Client as OllamaClient
-
-from tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
-from tooluse.settings import ClientType, ModelConfig
-from tooluse.tools import ToolCollection, ToolRegistry
 
 
 class LLMClient:

@@ -1,14 +1,12 @@
 import pytest
 from loguru import logger
-from pydantic import HttpUrl
 
-from tooluse.calculator import add
-from tooluse.schemagenerators import (
+from llm_tooluse.calculator import add
+from llm_tooluse.schemagenerators import (
     BasicSchemaGenerator,
     LLMSchemaGenerator,
     ToolSchema,
 )
-from tooluse.settings import ClientType, ModelConfig, ModelType
 
 
 @pytest.fixture

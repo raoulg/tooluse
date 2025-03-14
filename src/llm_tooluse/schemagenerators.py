@@ -21,10 +21,10 @@ from typing import (
 from loguru import logger
 from pydantic import BaseModel
 
-from tooluse.settings import ClientType
+from llm_tooluse.settings import ClientType
 
 if TYPE_CHECKING:
-    from tooluse.llm import LLMClient
+    from llm_tooluse.llm import LLMClient
 
 
 SCHEMA_PROMPT_TEMPLATE = Template("""Given this Python function information:

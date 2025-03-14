@@ -4,7 +4,7 @@ from typing import List
 import pytest
 from pydantic import HttpUrl
 
-from tooluse.settings import ClientType, ModelConfig, ModelType
+from llm_tooluse.settings import ClientType, ModelConfig, ModelType
 
 
 def generate_model_configs() -> List[ModelConfig]:

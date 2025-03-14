@@ -6,14 +6,14 @@ import pytest
 from _pytest.logging import LogCaptureFixture
 from loguru import logger
 
-from tooluse.llm import LLMClient
-from tooluse.schemagenerators import (
+from llm_tooluse.llm import LLMClient
+from llm_tooluse.schemagenerators import (
     BasicSchemaGenerator,
     LLMSchemaGenerator,
     ParameterSchema,
     ToolSchema,
 )
-from tooluse.settings import ClientType, ModelConfig, ModelType
+from llm_tooluse.settings import ClientType, ModelConfig, ModelType
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def propagate_logs():
 
     logger.remove()
     logger.add(PropagateHandler(), format="{message}")
-    yield
+    return
 
 
 @pytest.fixture

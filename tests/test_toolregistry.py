@@ -1,8 +1,8 @@
 import pytest
 
-from tooluse.calculator import add, subtract
-from tooluse.schemagenerators import ToolSchema
-from tooluse.tools import Tool, ToolCollection, ToolFactory, ToolRegistry
+from llm_tooluse.calculator import add, subtract
+from llm_tooluse.schemagenerators import ToolSchema
+from llm_tooluse.tools import Tool, ToolCollection, ToolFactory, ToolRegistry
 
 
 # Test fixtures

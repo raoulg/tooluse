@@ -1,7 +1,7 @@
 [project]
-name = "tooluse"
+name = "llm_tooluse"
 version = "0.1.0"
-description = "Add your description here"
+description = "Automate tooluse with LLMs"
 readme = "README.md"
 authors = [
     { name = "raoul grouls", email = "Raoul.Grouls@han.nl" }
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tooluse = "tooluse:main"
+tooluse = "llm_tooluse:main"
 
 [project.optional-dependencies]
 demo = [
@@ -37,14 +37,14 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-ra -q --log-cli-level=WARNING --cov=tooluse --cov-report=term-missing -k 'not integration'"
+addopts = "-ra -q --log-cli-level=WARNING --cov=llm_tooluse --cov-report=term-missing -k 'not integration'"
 testpaths = ["tests"]
 markers = [
 	"integration: mark a test as an integration test",
 ]
 
 [tool.coverage.run]
-source = ["tooluse"]
+source = ["llm_tooluse"]
 omit = [
     "tests/*",
     "**/__init__.py",

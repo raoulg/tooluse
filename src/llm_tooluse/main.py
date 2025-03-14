@@ -3,11 +3,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from loguru import logger
 
-from tooluse.calculator import add, subtract
-from tooluse.llm import LLMClient
-from tooluse.schemagenerators import BasicSchemaGenerator, LLMSchemaGenerator
-from tooluse.settings import ModelConfig
-from tooluse.tools import Tool, ToolCollection, ToolFactory
+from llm_tooluse.calculator import add, subtract
+from llm_tooluse.llm import LLMClient
+from llm_tooluse.schemagenerators import BasicSchemaGenerator, LLMSchemaGenerator
+from llm_tooluse.settings import ModelConfig
+from llm_tooluse.tools import Tool, ToolCollection, ToolFactory
 
 
 def main():

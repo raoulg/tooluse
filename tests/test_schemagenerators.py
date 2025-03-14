@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from loguru import logger
 
-from tooluse.schemagenerators import ToolSchema
+from llm_tooluse.schemagenerators import ToolSchema
 
 
 def test_basic_schema_creation(basic_schema):
