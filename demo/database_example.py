@@ -7,11 +7,11 @@ from loguru import logger
 from sqlalchemy import Column, Float, Integer, String, create_engine, select
 from sqlalchemy.orm import Session, declarative_base
 
-from tooluse.calculator import add, subtract
-from tooluse.llm import LLMClient
-from tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
-from tooluse.settings import ClientType, ModelConfig, ModelType
-from tooluse.tools import ToolFactory
+from llm_tooluse.calculator import add, subtract
+from llm_tooluse.llm import LLMClient
+from llm_tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
+from llm_tooluse.settings import ClientType, ModelConfig, ModelType
+from llm_tooluse.tools import ToolFactory
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -139,11 +139,13 @@ if __name__ == "__main__":
         adapter = LlamaAdapter
 
     # run the queries
-    for query in queries:
-        logger.info(f"Query: {query}")
+    for i, query in enumerate(queries):
+        logger.info("=" * 35 + f" User Query {i} " + "=" * 35)
+        logger.info(f"{query}")
+        logger.info("=" * 35+ " LLM Response "+ "=" * 35)
         messages = [{"role": "user", "content": query}]
         response = llm(messages)
-        logger.info(adapter.get_content(response))
-        logger.info("=" * 60)
+        response = adapter.get_content(response)
+        logger.info(f"LLM response: \n{response}")
     engine.dispose()
     os.remove("simple_inventory.db")
