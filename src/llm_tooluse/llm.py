@@ -116,8 +116,8 @@ class LLMClient:
                             and toolcall["args"][p.name] in [None, "", "null", "None"]
                         ):
                             toolcall["args"][p.name] = None
-                    logger.debug(
-                        f"Executing tool: {toolcall['name']} with {toolcall['args']}"
+                    logger.info(
+                        f"LLM decides to use tool: {toolcall['name']} with {toolcall['args']}"
                     )
                     try:
                         if toolcall["name"] not in self.tools:
