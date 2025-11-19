@@ -1,11 +1,11 @@
-# tooluse - Seamless Function Integration for LLMs
+# llm_tooluse - Seamless Function Integration for LLMs
 
-`tooluse` is a Python package that simplifies the integration of custom functions (tools) with Large Language Models (LLMs). It provides a streamlined way to register functions, automatically generate schemas, and enable LLMs to use these tools in a conversational context.
+`llm_tooluse` is a Python package that simplifies the integration of custom functions (tools) with Large Language Models (LLMs). It provides a streamlined way to register functions, automatically generate schemas, and enable LLMs to use these tools in a conversational context.
 
 ## Installation
 
 ```bash
-uv install tooluse
+uv install llm_tooluse
 ```
 (or use `pip` instead of `uv` if you like to install your dependencies 100x slower)
 
@@ -14,9 +14,9 @@ uv install tooluse
 ### Creating and Using Tools
 
 ```python
-from tooluse.tools import ToolFactory
-from tooluse.settings import ClientType, ModelType, ModelConfig
-from tooluse.llm import LLMClient
+from llm_tooluse.tools import ToolFactory
+from llm_tooluse.settings import ClientType, ModelType, ModelConfig
+from llm_tooluse.llm import LLMClient
 
 # Define some simple functions as tools
 def add(a: int, b: int) -> int:
@@ -79,7 +79,7 @@ A `Tool` combines a callable function with its schema:
 
 ```python
 from pathlib import Path
-from tooluse.tools import Tool
+from llm_tooluse.tools import Tool
 
 # Create a tool directly with the basic schemagenerator by default
 calculator_tool = Tool.from_function(add)
@@ -112,7 +112,7 @@ You can also
 `ToolCollection` provides a view into the global registry, enabling operations on groups of tools:
 
 ```python
-from tooluse.tools import ToolCollection
+from llm_tooluse.tools import ToolCollection
 
 # Create collections from different domains, automatically registering the tools
 math_tools = factory.create_collection([add, subtract, multiply, divide])
@@ -140,11 +140,11 @@ result = math_tools("add", a=5, b=3)
 The package provides different ways to generate schemas for your tools:
 
 ```python
-from tooluse.schemagenerators import (
+from llm_tooluse.schemagenerators import (
     BasicSchemaGenerator,
     LLMSchemaGenerator
 )
-from tooluse.llm import LLMClient
+from llm_tooluse.llm import LLMClient
 
 # Basic schema generation from function signatures and docstrings
 basic_generator = BasicSchemaGenerator()
@@ -168,7 +168,7 @@ schemas = enhanced_tool_collection.get_schemas()
 The `ToolRegistry` provides global access to registered tools, and is used by both the `ToolFactory` and `LLMClient` in the background:
 
 ```python
-from tooluse.tools import ToolRegistry
+from llm_tooluse.tools import ToolRegistry
 
 # Access the global registry
 registry = ToolRegistry()
@@ -188,7 +188,7 @@ registry.reset()
 The package includes adapters to format tool schemas and parse responses for different LLM providers:
 
 ```python
-from tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
+from llm_tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
 
 # Get schemas formatted for specific providers
 anthropic_schema = AnthropicAdapter.format_schema(tool.schema)
@@ -202,7 +202,7 @@ You can also configure models using TOML files:
 
 ```python
 from pathlib import Path
-from tooluse.settings import ModelConfig
+from llm_tooluse.settings import ModelConfig
 
 config = ModelConfig.from_toml(Path("config.toml"))
 llm = LLMClient(config)
