@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from loguru import logger
+from llm_tooluse.mcp_adapter import MCPToolReference
 
 from llm_tooluse.schemagenerators import (
     BasicSchemaGenerator,
@@ -118,19 +119,18 @@ class ToolRegistry:
     def __init__(self):
         if not self.initialized:
             logger.debug("initializing registry")
-            # Use WeakValueDictionary to allow tool cleanup if no references remain
-            # BUG: WeakValue cleans out when used in factory?
-            # Using dict for now
-            self._tools: Dict = {}
+            self._tools: Dict[str, MCPToolReference] = {}
             self.initialized = True
 
-    def register(self, tool: "Tool") -> None:
+    def register(self, tool: "MCPToolReference") -> None:
         """Register a single tool"""
         key = str(tool)
         self._tools[key] = tool
+        logger.debug(f"Registered tool: {key}")
 
-    def get(self, name: str) -> "Tool":
+    def get(self, name: str) -> "MCPToolReference":
         """Get a tool by name"""
+        logger.debug(f"Retrieving tool: {name}")
         if name not in self._tools:
             available = list(self.available_tools)
             logger.debug(f"registry contains: {available}")
@@ -140,6 +140,7 @@ class ToolRegistry:
     def reset(self) -> None:
         """Clear all tools from the registry"""
         self._tools = {}
+        logger.debug("Tool registry has been reset")
 
     @property
     def available_tools(self) -> Set[str]:
@@ -166,7 +167,7 @@ class ToolCollection:
             raise ValueError(f"Unknown tools: {unknown}")
 
     @classmethod
-    def from_tools(cls, tools: list["Tool"]) -> "ToolCollection":
+    def from_tools(cls, tools: list["MCPToolReference"]) -> "ToolCollection":
         """Create a collection from a list of tool functions"""
         registry = ToolRegistry()
         for tool in tools:
@@ -177,22 +178,32 @@ class ToolCollection:
 
         return cls(names)
 
-    def get_functions(self) -> list["Tool"]:
+    def get_functions(self) -> list["MCPToolReference"]:
         """Returns list of tool functions"""
         return [self._registry.get(name) for name in self.tool_names]
 
     def get_schemas(self) -> List[ToolSchema]:
         """Returns list of tool schemas"""
-        return [self._registry.get(name).schema for name in list(self.tool_names)]
+        schemas = []
+        for name in self.tool_names:
+            logger.debug(f"getting schema for tool: {name}")
+            schema = self._registry.get(name).get_schema()
+            logger.debug(f"got schema: {schema}")
+            schemas.append(schema)
+        logger.debug(f"returning schemas: {schemas}")
+        return schemas
 
-    def __getitem__(self, name: str) -> "Tool":
+        # return [self._registry.get(name).get_schema() for name in list(self.tool_names)]
+
+    def __getitem__(self, name: str) -> "MCPToolReference":
         return self._registry.get(name)
 
     def __call__(self, tool: str, **kwargs) -> Any:
         """Execute a tool from this collection"""
         if tool not in self:
             raise ValueError(f"Tool {tool} not in this collection")
-        return self._registry.get(tool)(**kwargs)
+        ref = self._registry.get(tool)
+        return ref(**kwargs)
 
     def __contains__(self, item: str) -> bool:
         """Check if a tool is in this collection"""
@@ -222,6 +233,9 @@ class ToolCollection:
         names = [str(n) for n in self.tool_names]
         return f"ToolCollection({names})"
 
+    def __len__(self) -> int:
+        """Number of tools in the collection"""
+        return len(self.tool_names)
 
 class ToolFactory:
     """Factory for creating collections of tools"""
@@ -249,3 +263,46 @@ class ToolFactory:
         """Create a ToolCollection from a list of functions or Tools"""
         tools = [self.create_tool(func) for func in functions]
         return ToolCollection.from_tools(tools)
+
+class MCPToolLoader:
+    """
+    Factory for loading tools from MCP servers.
+    Replaces the old ToolFactory.
+    """
+
+    def __init__(self, connection_manager=None):
+        from llm_tooluse.mcp_client import MCPConnectionManager
+
+        self.connection_manager = connection_manager or MCPConnectionManager()
+
+    async def load_server(
+        self,
+        name: str,
+        command: str,
+        args: Optional[List[str]] = None,
+        env: Optional[Dict[str, str]] = None
+    ) -> ToolCollection:
+        """
+        Connect to an MCP server and load its tools.
+
+        Args:
+            name: Name for this server connection
+            command: Command to run the server
+            args: Command arguments
+            env: Environment variables
+
+        Returns:
+            ToolCollection containing all tools from the server
+        """
+        # Connect to server
+        await self.connection_manager.connect_server(name, command, args, env)
+
+        # Discover tools
+        tools = await self.connection_manager.discover_tools(name)
+
+        # Create collection
+        return ToolCollection.from_tools(tools)
+
+    async def cleanup(self) -> None:
+        """Disconnect from all servers"""
+        await self.connection_manager.disconnect_all()
