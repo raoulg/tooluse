@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Union
 from loguru import logger
 
 from llm_tooluse.mcp_adapter import MCPToolReference
+from llm_tooluse.mcp_client import MCPConnectionManager
 
 from llm_tooluse.schemagenerators import (
     BasicSchemaGenerator,
@@ -275,10 +276,7 @@ class MCPToolLoader:
     Factory for loading tools from MCP servers.
     """
 
-    def __init__(self, connection_manager=None):
-        # We no longer need to import or expose TransportType
-        from llm_tooluse.mcp_client import MCPConnectionManager
-
+    def __init__(self, connection_manager = None):
         self.connection_manager = connection_manager or MCPConnectionManager()
 
     async def load_server(
@@ -288,28 +286,20 @@ class MCPToolLoader:
     ) -> ToolCollection:
         """
         Connect to an MCP server and load its tools.
+        FastMCP automatically infers the transport based on the 'target' argument:
 
-        The 'target' argument automatically determines the transport:
-        - URLs (starting with http://) use SSE.
-        - File paths or commands use Stdio.
+        1. FastMCP instance → In-memory transport (perfect for testing)
+        2. File path ending in .py → Python Stdio transport
+        3. File path ending in .js → Node.js Stdio transport
+        4. URL starting with http:// or https:// → HTTP transport
+        5. MCPConfig dictionary → Multi-server client
 
         Args:
             name: Unique name for this server connection
-            target: Connection string (e.g., 'http://localhost:8000', 'my_script.py', 'npx -y server-pkg')
-            env: Environment variables (optional, mostly for stdio connections)
+            target: Connection string (e.g., 'http://localhost:8000', 'my_script.py')
 
         Returns:
             ToolCollection containing all tools from the server
-
-        Examples:
-            # Stdio (Local Python script)
-            await loader.load_server("calculator", target="calc_server.py")
-
-            # Stdio (Command)
-            await loader.load_server("filesystem", target="npx -y @modelcontextprotocol/server-filesystem")
-
-            # SSE (HTTP)
-            await loader.load_server("ml_tools", target="http://localhost:8000/sse")
         """
 
         # Connect to server (ConnectionManager handles transport detection)
