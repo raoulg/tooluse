@@ -9,8 +9,8 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.42.0",
+    "fastmcp>=2.13.1",
     "loguru>=0.7.3",
-    "mcp>=1.21.2",
     "ollama>=0.4.5",
     "python-dotenv>=1.0.1",
 ]
