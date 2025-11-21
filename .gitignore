@@ -12,3 +12,4 @@ logs/
 .coverage
 config.toml
 dev/
+simple_inventory.db
