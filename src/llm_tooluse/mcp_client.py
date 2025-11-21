@@ -1,150 +1,117 @@
 """
-MCP Connection Manager
+MCP Connection Manager (Refactored with fastmcp)
 Manages connections to multiple MCP servers and tool discovery.
 """
-import os
-from pathlib import Path
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from fastmcp import Client  # The new high-level client
 
 from llm_tooluse.mcp_adapter import MCPToolReference
 
-
 class MCPConnectionManager:
     """
-    Manages connections to MCP servers and provides tool discovery.
+    Manages connections to MCP servers using the fastmcp library.
+    Automatically handles transport detection (Stdio vs HTTP).
     """
 
     def __init__(self):
-        self._sessions: Dict[str, ClientSession] = {}
-        self._contexts: Dict[str, Any] = {}  # Store context managers
+        # Stores active fastmcp.Client instances
+        self._clients: Dict[str, Client] = {}
 
     async def connect_server(
         self,
         name: str,
-        command: str,
-        args: Optional[List[str]] = None,
-        env: Optional[Dict[str, str]] = None
+        target: str,
     ) -> None:
         """
-        Connect to an MCP server via stdio.
+        Connect to an MCP server. The transport is inferred from the target.
 
         Args:
             name: Unique name for this server connection
-            command: Command to execute (e.g., 'python', 'node')
-            args: Command arguments (e.g., ['-m', 'my_server'])
-            env: Environment variables for the server process
+            target: The connection string.
+                    - URL (e.g., "http://localhost:8000") -> HTTP
+                    - Path (e.g., "./server.py", "mcp-server-git") -> Stdio
         """
-        if name in self._sessions:
+        if name in self._clients:
             logger.warning(f"Server '{name}' already connected")
             return
 
-        args = args or []
-        env_vars = env or {}
+        logger.debug(f"Connecting to MCP server '{name}' at target: {target}")
 
-        # Merge with current environment
-        full_env = os.environ.copy()
-        full_env.update(env_vars)
+        try:
+            client = Client(target)
 
-        server_params = StdioServerParameters(
-            command=command,
-            args=args,
-            env=full_env if env_vars else None
-        )
+            async with client:
+                await client.ping()
 
-        logger.debug(f"Connecting to MCP server '{name}': {command} {' '.join(args)}")
+                self._clients[name] = client
+                logger.info(f"Successfully connected to MCP server '{name}'")
 
-        # Create and store the context manager
-        context = stdio_client(server_params)
-        read_stream, write_stream = await context.__aenter__()
-
-        # Create session
-        session = ClientSession(read_stream, write_stream)
-        await session.__aenter__()
-
-        # Initialize the session
-        await session.initialize()
-
-        self._sessions[name] = session
-        self._contexts[name] = (context, session)
-
-        logger.info(f"Connected to MCP server '{name}'")
+        except Exception as e:
+            logger.error(f"Failed to connect to '{name}': {e}")
+            raise e
 
     async def discover_tools(self, server_name: str) -> List[MCPToolReference]:
         """
         Discover all tools available from a connected server.
-
-        Args:
-            server_name: Name of the connected server
-
-        Returns:
-            List of MCPToolReference objects for all tools
-
-        Raises:
-            ValueError: If server is not connected
         """
-        if server_name not in self._sessions:
+        if server_name not in self._clients:
             raise ValueError(f"Server '{server_name}' is not connected")
 
-        session = self._sessions[server_name]
+        client = self._clients[server_name]
 
-        logger.debug(f"Discovering tools from server '{server_name}'")
-        tools_list = await session.list_tools()
+        try:
+            logger.debug(f"Discovering tools from server '{server_name}'")
+            async with client:
 
-        tool_refs = []
-        for tool in tools_list.tools:
-            tool_ref = MCPToolReference(
-                name=tool.name,
-                description=tool.description or "",
-                input_schema=tool.inputSchema,
-                _session=session
-            )
-            tool_refs.append(tool_ref)
-            logger.debug(f"Discovered tool: {tool.name}")
+                tools_list = await client.list_tools()
 
-        logger.info(f"Discovered {len(tool_refs)} tools from '{server_name}'")
-        return tool_refs
+                tool_refs = []
+                for tool in tools_list:
+                    tool_ref = MCPToolReference(
+                        name=tool.name,
+                        description=tool.description or "",
+                        input_schema=tool.inputSchema,
+                        _client=client  # Passing the high-level client
+                    )
+                    tool_refs.append(tool_ref)
+
+            logger.info(f"Discovered {len(tool_refs)} tools from '{server_name}'")
+            return tool_refs
+
+        except Exception as e:
+            logger.error(f"Error discovering tools for '{server_name}': {e}")
+            raise e
 
     async def disconnect_server(self, name: str) -> None:
         """
         Disconnect from a specific server.
-
-        Args:
-            name: Name of the server to disconnect
         """
-        if name not in self._sessions:
+        if name not in self._clients:
             logger.warning(f"Server '{name}' is not connected")
             return
 
-        context, session = self._contexts[name]
-
-        # Close session
-        await session.__aexit__(None, None, None)
-
-        # Close transport
-        await context.__aexit__(None, None, None)
-
-        del self._sessions[name]
-        del self._contexts[name]
-
-        logger.info(f"Disconnected from server '{name}'")
+        client = self._clients[name]
+        try:
+            # Manually exit the context to clean up resources
+            await client.__aexit__(None, None, None)
+            del self._clients[name]
+            logger.info(f"Disconnected from server '{name}'")
+        except Exception as e:
+            logger.error(f"Error during disconnect of '{name}': {e}")
 
     async def disconnect_all(self) -> None:
         """Disconnect from all servers."""
-        server_names = list(self._sessions.keys())
+        server_names = list(self._clients.keys())
         for name in server_names:
             await self.disconnect_server(name)
-
         logger.info("Disconnected from all servers")
 
     def is_connected(self, name: str) -> bool:
-        """Check if a server is connected."""
-        return name in self._sessions
+        return name in self._clients
 
     @property
     def connected_servers(self) -> List[str]:
-        """Get list of all connected server names."""
-        return list(self._sessions.keys())
+        return list(self._clients.keys())

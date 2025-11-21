@@ -5,6 +5,7 @@ Provides a reference-based wrapper for MCP tools that enables set operations.
 from dataclasses import dataclass
 from typing import Any, Dict
 from llm_tooluse.schemagenerators import ParameterSchema, ToolSchema
+from loguru import logger
 
 
 @dataclass
@@ -17,7 +18,7 @@ class MCPToolReference:
     name: str
     description: str
     input_schema: Dict[str, Any]
-    _session: Any  # MCP ClientSession handle
+    _client: Any  # FastMCP Client
 
     async def __call__(self, **kwargs) -> Any:
         """
@@ -29,13 +30,15 @@ class MCPToolReference:
         Returns:
             Tool execution result
         """
-        result = await self._session.call_tool(self.name, kwargs)
-
-        # Extract content from MCP result
-        if hasattr(result, 'content') and len(result.content) > 0:
-            # Return first content item's text
-            return result.content[0].text if hasattr(result.content[0], 'text') else result.content[0]
-        return result
+        logger.info(f"Calling MCP tool '{self.name}' with args: {kwargs}")
+        async with self._client as client:
+            result = await client.call_tool(self.name, kwargs)
+            logger.debug(f"Found result: {result}")
+            if hasattr(result, 'content') and len(result.content) > 0:
+                logger.debug(f"Returning result.content: {result.content}")
+                return result.content[0].text
+            logger.warning("No content, returning raw result")
+            return result
 
     def __hash__(self) -> int:
         """Hash based on tool name for set operations."""
@@ -43,6 +46,7 @@ class MCPToolReference:
 
     def __eq__(self, other: object) -> bool:
         """Tools are equal if they have the same name."""
+        # TODO: maybe create _client.name/tool.name for better uniqueness? Or add schema?
         if not isinstance(other, MCPToolReference):
             return NotImplemented
         return self.name == other.name
