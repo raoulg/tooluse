@@ -16,7 +16,7 @@ class LLMClient:
         registry = ToolRegistry()
         all_tools = ToolCollection(registry.available_tools)
 
-        # Filter tools based on config
+        # Filter tools per LLMclient based on config
         if config.allowed_tools is None:
             self.tools: ToolCollection = all_tools
             logger.debug(f"All tools allowed: {self.tools.tool_names}")
@@ -72,12 +72,15 @@ class LLMClient:
             model=self.config.model_type, messages=messages, **kwargs
         )
 
-    def __call__(self, messages, **kwargs):
+    async def __call__(self, messages, **kwargs):
         if self.config.client_type == ClientType.ANTHROPIC:
+            logger.debug("Using Anthropic")
             adapter = AnthropicAdapter
             schemas = self.tools.get_schemas()
+            logger.success("Retrieved tool schemas")
             tools = [adapter.format_schema(schema) for schema in schemas]
-            return self._tool_loop(
+            logger.debug(f"Using Anthropic adapter with tools: {tools}")
+            return await self._tool_loop(
                 call_func=self._anthropic_call,
                 messages=messages,
                 adapter=adapter,
@@ -85,10 +88,13 @@ class LLMClient:
                 **kwargs,
             )
         elif self.config.client_type == ClientType.OLLAMA:
+            logger.debug("Using Ollama")
             adapter = LlamaAdapter
             schemas = self.tools.get_schemas()
+            logger.success("Retrieved tool schemas")
             tools = [adapter.format_schema(schema) for schema in schemas]
-            return self._tool_loop(
+            logger.debug(f"Using Ollama adapter with tools: {tools}")
+            return await self._tool_loop(
                 self._ollama_call,
                 messages=messages,
                 adapter=adapter,
@@ -98,7 +104,7 @@ class LLMClient:
         else:
             raise ValueError(f"Unsupported client type: {self.config.client_type}")
 
-    def _tool_loop(self, call_func, messages, adapter, **kwargs):
+    async def _tool_loop(self, call_func, messages, adapter, **kwargs):
         try:
             response = call_func(messages=messages, **kwargs)
             messages = adapter.append_message(messages, response)
@@ -109,7 +115,11 @@ class LLMClient:
             if tool_calls:
                 for tool in tool_calls:
                     toolcall = adapter.parse_tool_call(tool)
-                    for p in self.tools[toolcall["name"]].schema.parameters:
+                    schema = self.tools[toolcall["name"]].get_schema()
+                    logger.debug(f"From tool {toolcall['name']} got schema: {schema}")
+
+                    for p in schema.parameters:
+                        logger.debug(f"Checking if {p.name} is nullable {p.nullable} for arg {toolcall['args'][p.name]}")
                         if (
                             p.name in toolcall["args"]
                             and p.nullable
@@ -124,7 +134,7 @@ class LLMClient:
                             logger.warning(f"Tool {toolcall['name']} not registered")
                             continue
 
-                        output = self.tools(toolcall["name"], **toolcall["args"])
+                        output = await self.tools(toolcall["name"], **toolcall["args"])
 
                         # Format tool response using the adapter
                         tool_response = adapter.format_tool_response(toolcall, output)
