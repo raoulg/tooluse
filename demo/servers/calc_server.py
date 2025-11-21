@@ -2,7 +2,7 @@
 Minimal Calculator MCP Server
 A simple MCP server with basic calculator tools for testing.
 """
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 # Create the FastMCP server
 mcp = FastMCP("calculator")

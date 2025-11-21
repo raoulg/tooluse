@@ -3,21 +3,20 @@ import sys
 from enum import Enum
 from typing import Dict, List, Optional
 
+from fastmcp import FastMCP
 from loguru import logger
+
 from sqlalchemy import Column, Float, Integer, String, create_engine, select
 from sqlalchemy.orm import Session, declarative_base
-
-from llm_tooluse.calculator import add, subtract
-from llm_tooluse.llm import LLMClient
-from llm_tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
-from llm_tooluse.settings import ClientType, ModelConfig, ModelType
-from llm_tooluse.tools import ToolFactory
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
+
 engine = create_engine("sqlite:///simple_inventory.db", echo=False)
 Base = declarative_base()
+
+mcp = FastMCP("product database")
 
 
 class Product(Base):
@@ -69,7 +68,7 @@ def seed_sample_data():
         session.commit()
         print(f"Database seeded with {len(products)} products")
 
-
+@mcp.tool()
 def get_min_max_per_category(
     category: ProductCategory,
     min_price: float,
@@ -86,18 +85,24 @@ def get_min_max_per_category(
     Returns:
         List of matching products
     """
+    logger.info(f"Fetching products in category '{category}' with price between {min_price} and {max_price}")
     with Session(engine) as session:
         query = select(Product)
         if category is not None:
             if isinstance(category, str):
                 category = ProductCategory(category)
-            query = query.where(Product.category == category.value)
+            if category != ProductCategory.All:
+                query = query.where(Product.category == category.value)
+            logger.info(f"query after category filter: {query}")
         if min_price is not None:
             query = query.where(Product.price >= min_price)
         if max_price is not None:
             query = query.where(Product.price <= max_price)
 
+        logger.info(f"Final query: {query}")
+
         results = session.execute(query).scalars().all()
+        logger.info(f"Found {len(results)} products matching criteria")
         return [
             {
                 "id": p.id,
@@ -111,42 +116,11 @@ def get_min_max_per_category(
 
 
 if __name__ == "__main__":
-    # set up database
     Base.metadata.create_all(engine)
     seed_sample_data()
+    logger.info("Starting MCP database server...")
+    mcp.run()
+    logger.info("Shutting down MCP database server...")
 
-    # create tools directly from functions
-    factory = ToolFactory()
-    collection = factory.create_collection([get_min_max_per_category, add, subtract])
-
-    # configure the model
-    config = ModelConfig(
-        client_type=ClientType.OLLAMA,
-        model_type=ModelType.LLAMA31,
-    )
-    llm = LLMClient(config)
-
-    queries = [
-        "How many products do we have in total?",
-        "I have a budget of 700,-, which Phones are available?",
-        "How many products are there below 400,-?",
-        "I am thinking about getting something nice for myself. I want to spend about 500,-. What combinations of products are available so i get to a total of 500,-?",
-        "what is 2345 plus 578932?",
-    ]
-
-    # adapter per model
-    adapter = AnthropicAdapter
-    if config.client_type == ClientType.OLLAMA:
-        adapter = LlamaAdapter
-
-    # run the queries
-    for i, query in enumerate(queries):
-        logger.info("=" * 35 + f" User Query {i} " + "=" * 35)
-        logger.info(f"{query}")
-        logger.info("=" * 35+ " LLM Response "+ "=" * 35)
-        messages = [{"role": "user", "content": query}]
-        response = llm(messages)
-        response = adapter.get_content(response)
-        logger.info(f"LLM response: \n{response}")
     engine.dispose()
     os.remove("simple_inventory.db")
