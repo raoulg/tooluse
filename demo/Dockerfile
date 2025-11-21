@@ -7,7 +7,7 @@ WORKDIR /app
 # Install the high-level framework
 RUN pip install --no-cache-dir fastmcp uvicorn
 
-COPY sse_server.py .
+COPY servers/sse_server.py .
 
 EXPOSE 8000
 

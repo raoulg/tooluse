@@ -19,7 +19,7 @@ async def test_basic_connection():
     loader = MCPToolLoader()
 
     # Connect to calculator server
-    calculator_path = Path("demo/calc_server.py").resolve()
+    calculator_path = Path("demo/servers/calc_server.py").resolve()
 
 
     collection = await loader.load_server(
@@ -46,7 +46,7 @@ async def test_tool_execution():
 
     loader = MCPToolLoader()
 
-    calculator_path = Path("demo/calc_server.py").resolve()
+    calculator_path = Path("demo/servers/calc_server.py").resolve()
     collection = await loader.load_server(
         name="calculator",
         target=calculator_path,
@@ -82,7 +82,7 @@ async def test_set_operations():
     logger.info("\n=== Test 3: Set Operations ===")
 
     loader = MCPToolLoader()
-    calculator_path = Path("demo/calc_server.py").resolve()
+    calculator_path = Path("demo/servers/calc_server.py").resolve()
     full_collection = await loader.load_server(
         name="calculator",
         target=calculator_path,
@@ -123,7 +123,7 @@ async def test_collection_union():
 
     loader = MCPToolLoader()
 
-    calculator_path = Path("demo/calc_server.py").resolve()
+    calculator_path = Path("demo/servers/calc_server.py").resolve()
     collection = await loader.load_server(
         name="calculator",
         target=calculator_path,
