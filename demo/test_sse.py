@@ -2,6 +2,10 @@ import asyncio
 from pathlib import Path
 from loguru import logger
 from llm_tooluse import MCPToolLoader
+import sys
+
+logger.remove()
+logger.add(sys.stdout, level="DEBUG")
 
 async def main():
     loader = MCPToolLoader()
@@ -11,11 +15,12 @@ async def main():
     try:
         toolcollection = await loader.load_server(
             name="sse_server",
-            transport="sse",
-            url="http://localhost:8000/mcp"
+            target="http://localhost:8000/mcp"
         )
 
         logger.info(f"Loaded {len(toolcollection)} tools via SSE")
+        result = await toolcollection("add", a=5, b=3)
+        logger.info(f"add(5, 3) = {result}")
 
         # Use the SSE server
         # result = await ml_collection("some_tool", arg="value")
@@ -29,4 +34,5 @@ async def main():
     logger.info("\n✅ Done!")
 
 if __name__ == "__main__":
+    logger.info("Starting SSE test...")
     asyncio.run(main())

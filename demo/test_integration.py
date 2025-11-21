@@ -24,8 +24,7 @@ async def test_basic_connection():
 
     collection = await loader.load_server(
         name="calculator",
-        command="python",
-        args=[str(calculator_path)]
+        target=calculator_path,
     )
 
     logger.info(f"Loaded tools: {collection}")
@@ -37,6 +36,7 @@ async def test_basic_connection():
         logger.info(f"Tool Schema {schema.name}")
 
     await loader.cleanup()
+    logger.success("Basic connection test passed!")
     return collection
 
 
@@ -49,8 +49,7 @@ async def test_tool_execution():
     calculator_path = Path("demo/calc_server.py").resolve()
     collection = await loader.load_server(
         name="calculator",
-        command="python",
-        args=[str(calculator_path)]
+        target=calculator_path,
     )
 
     # Test addition
@@ -73,7 +72,7 @@ async def test_tool_execution():
     logger.info(f"divide(20, 5) = {result}")
     assert float(result) == 4.0, f"Expected 4.0, got {result}"
 
-    logger.success("All calculations passed!")
+    logger.success("\n=== Test 2: All calculations passed!")
 
     await loader.cleanup()
 
@@ -83,12 +82,10 @@ async def test_set_operations():
     logger.info("\n=== Test 3: Set Operations ===")
 
     loader = MCPToolLoader()
-
     calculator_path = Path("demo/calc_server.py").resolve()
     full_collection = await loader.load_server(
         name="calculator",
-        command="python",
-        args=[str(calculator_path)]
+        target=calculator_path,
     )
 
     logger.info(f"Full collection: {full_collection}")
@@ -115,7 +112,7 @@ async def test_set_operations():
     except ValueError as e:
         logger.info(f"Correctly blocked removed tool: {e}")
 
-    logger.success("Set operations work correctly!")
+    logger.success("=== Test 3: Set operations work correctly!")
 
     await loader.cleanup()
 
@@ -129,8 +126,7 @@ async def test_collection_union():
     calculator_path = Path("demo/calc_server.py").resolve()
     collection = await loader.load_server(
         name="calculator",
-        command="python",
-        args=[str(calculator_path)]
+        target=calculator_path,
     )
 
     # Create two subsets
@@ -150,7 +146,7 @@ async def test_collection_union():
     assert "multiply" in combined
     assert "divide" in combined
 
-    logger.success("Collection union works!")
+    logger.success("=== Test 4: Collection union works!")
 
     await loader.cleanup()
 
