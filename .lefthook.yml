@@ -1,0 +1,20 @@
+pre-commit:
+  commands:
+    lychee:
+      run: lychee . --suggest --max-concurrency 32 --format detailed --max-cache-age 7d --exclude-all-private
+    isort:
+      files: git ls-files
+      glob: '*.{py}'
+      run: isort {staged_files}
+      stage_fixed: true
+    format:
+      files: git ls-files
+      glob: '*.py'
+      run: ruff format {staged_files}
+    check:
+      files: git ls-files
+      glob: '*.py'
+      run: ruff check {staged_files} --fix
+    pyright:
+      glob: '*.py'
+      run: pyright {staged_files}
