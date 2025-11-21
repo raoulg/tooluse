@@ -2,113 +2,112 @@
 MCP Tool Loader
 Factory for loading tools from MCP servers using the fastmcp connection manager.
 """
+
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 from loguru import logger
 
-from llm_tooluse.mcp_adapter import MCPToolReference
 from llm_tooluse.mcp_client import MCPConnectionManager
-
-from llm_tooluse.schemagenerators import (
-    BasicSchemaGenerator,
-    LLMSchemaGenerator,
-    SchemaGenerator,
-    ToolSchema,
-)
+from llm_tooluse.schemagenerators import ParameterSchema, ToolSchema
 
 
 @dataclass
-class Tool:
+class MCPToolReference:
     """
-    Represents a tool that can be used by an LLM.
-    Combines the callable function with its schema.
+    Reference to an MCP tool from any server.
+    Provides a uniform interface regardless of tool source.
     """
 
-    func: Callable
-    schema: ToolSchema
+    name: str
+    description: str
+    input_schema: Dict[str, Any]
+    _client: Any  # FastMCP Client
 
-    @classmethod
-    def from_function(
-        cls, func: Callable, schema_generator: Optional[SchemaGenerator] = None
-    ) -> "Tool":
-        """Create a Tool from a function, optionally using a schema generator"""
-        generator = schema_generator or BasicSchemaGenerator()
-        schema = generator.generate_schema(func)
-        return cls(func=func, schema=schema)
+    async def __call__(self, **kwargs) -> Any:
+        """
+        Call the MCP tool with the given arguments.
 
-    @classmethod
-    def from_schema_dict(cls, func: Callable, schema_dict: Dict[str, Any]) -> "Tool":
-        """Create a Tool from a function and a schema dictionary"""
-        try:
-            schema = ToolSchema(
-                name=schema_dict["name"],
-                description=schema_dict["description"],
-                parameters=schema_dict["parameters"],
-                required=schema_dict["required"],
-            )
-        except KeyError as e:
-            raise ValueError(f"Invalid schema dictionary: {e}")
-        return cls(func=func, schema=schema)
+        Args:
+            **kwargs: Tool arguments matching the input_schema
 
-    @classmethod
-    def from_schema_file(cls, func: Callable, schema_file: Path) -> "Tool":
-        schema = ToolSchema.from_file(schema_file)
-        return cls(func=func, schema=schema)
-
-    def get_schema_fmt(self, format: str) -> Union[Dict[str, Any], str]:
-        """Get the schema in either dict or JSON format"""
-        if format.lower() == "json":
-            return self.schema.to_json()
-        if format.lower() == "dict":
-            return self.schema.to_dict()
-        raise ValueError(f"Unsupported format: {format}")
-
-    def update_schema(self, schema_source: str | Path) -> None:
-        """Update the schema from a JSON string"""
-        if isinstance(schema_source, Path):
-            self.schema = ToolSchema.from_file(schema_source)
-        else:
-            # Treat as JSON string
-            self.schema = ToolSchema.from_json(schema_source)
-
-    def __call__(self, *args, **kwargs) -> Any:
-        """Make the tool callable, delegating to the underlying function"""
-        return self.func(*args, **kwargs)
-
-    def __name__(self) -> str:
-        """Name of the tool is the name of the function"""
-        return self.func.__name__
-
-    def __str__(self) -> str:
-        return f"{self.func.__name__}"
-
-    def __repr__(self) -> str:
-        return f"{self.func.__name__}"
-
-    def __eq__(self, other: object) -> bool:
-        """Tools are equal if they have the same function and schema"""
-        if not isinstance(other, Tool):
-            return NotImplemented
-        same_func = self.func == other.func
-        same_schema = self.has_compatible_schema(other)
-        return same_func and same_schema
-
-    def has_compatible_schema(self, other: "Tool") -> bool:
-        """Check if schemas are compatible for LLM use"""
-        return (
-            self.schema.parameters == other.schema.parameters
-            and self.schema.required == other.schema.required
-        )
+        Returns:
+            Tool execution result
+        """
+        logger.info(f"Calling MCP tool '{self.name}' with args: {kwargs}")
+        async with self._client as client:
+            result = await client.call_tool(self.name, kwargs)
+            logger.debug(f"Found result: {result}")
+            if hasattr(result, "content") and len(result.content) > 0:
+                logger.debug(f"Returning result.content: {result.content}")
+                return result.content[0].text
+            logger.warning("No content, returning raw result")
+            return result
 
     def __hash__(self) -> int:
-        """Hash based on function and schema since those determine equality"""
-        params_tuple = tuple(
-            sorted((p.name, str(p.param_type)) for p in self.schema.parameters)
+        """Hash based on tool name for set operations."""
+        return hash(self.name)
+
+    def __eq__(self, other: object) -> bool:
+        """Tools are equal if they have the same name."""
+        # TODO: maybe create _client.name/tool.name for better uniqueness? Or add schema?
+        if not isinstance(other, MCPToolReference):
+            return NotImplemented
+        return self.name == other.name
+
+    # def __eq__(self, other: object) -> bool:
+    #     """Tools are equal if they have the same function and schema"""
+    #     if not isinstance(other, Tool):
+    #         return NotImplemented
+    #     same_func = self.func == other.func
+    #     same_schema = self.has_compatible_schema(other)
+    #     return same_func and same_schema
+
+    # def has_compatible_schema(self, other: "Tool") -> bool:
+    #     """Check if schemas are compatible for LLM use"""
+    #     return (
+    #         self.schema.parameters == other.schema.parameters
+    #         and self.schema.required == other.schema.required
+    #     )
+
+    # def __hash__(self) -> int:
+    #     """Hash based on function and schema since those determine equality"""
+    #     params_tuple = tuple(
+    #         sorted((p.name, str(p.param_type)) for p in self.schema.parameters)
+    #     )
+    #     required_tuple = tuple(sorted(self.schema.required))
+    #     return hash((self.func, params_tuple, required_tuple))
+
+    def __str__(self) -> str:
+        """String representation is the tool name."""
+        return self.name
+
+    def __repr__(self) -> str:
+        """Detailed representation."""
+        return f"MCPToolReference(name='{self.name}')"
+
+    def get_schema(self) -> ToolSchema:
+        """Convert MCP schema to ToolSchema format"""
+        properties = self.input_schema.get("properties", {})
+        required = self.input_schema.get("required", [])
+
+        parameters = []
+        for prop_name, prop_schema in properties.items():
+            param = ParameterSchema(
+                name=prop_name,
+                param_type=prop_schema.get("type", "string"),
+                description=prop_schema.get("description"),
+                enum=prop_schema.get("enum"),
+                nullable=prop_schema.get("nullable"),
+            )
+            parameters.append(param)
+
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters=parameters,
+            required=required,
         )
-        required_tuple = tuple(sorted(self.schema.required))
-        return hash((self.func, params_tuple, required_tuple))
 
 
 class ToolRegistry:
@@ -157,7 +156,11 @@ class ToolRegistry:
 class ToolCollection:
     """
     Represents a view into the tool registry, maintaining only the names
-    of tools in this collection
+    of tools in this collection.
+    Functions like a set:
+    - union of two collections : collectionA * collectionB
+    - difference of two collections : collectionA - collectionB
+    - remove a subset by name : collectionA - ['tool1', 'tool2']
     """
 
     def __init__(self, tool_names: Optional[Set[str]]):
@@ -244,39 +247,13 @@ class ToolCollection:
         """Number of tools in the collection"""
         return len(self.tool_names)
 
-class ToolFactory:
-    """Factory for creating collections of tools"""
-
-    def __init__(
-        self,
-        schema_generator: Optional[SchemaGenerator] = None,
-        llm_client: Optional[Any] = None,
-    ):
-        self.schema_generator = schema_generator
-        if llm_client and not schema_generator:
-            self.schema_generator = LLMSchemaGenerator(llm_client)
-        if not self.schema_generator:
-            self.schema_generator = BasicSchemaGenerator()
-
-    def create_tool(self, func: Union[Callable, Tool]) -> Tool:
-        """Create a single tool or return it if already a Tool"""
-        if isinstance(func, Tool):
-            return func
-        return Tool.from_function(func, self.schema_generator)
-
-    def create_collection(
-        self, functions: List[Union[Callable, Tool]]
-    ) -> ToolCollection:
-        """Create a ToolCollection from a list of functions or Tools"""
-        tools = [self.create_tool(func) for func in functions]
-        return ToolCollection.from_tools(tools)
 
 class MCPToolLoader:
     """
     Factory for loading tools from MCP servers.
     """
 
-    def __init__(self, connection_manager = None):
+    def __init__(self, connection_manager=None):
         self.connection_manager = connection_manager or MCPConnectionManager()
 
     async def load_server(
@@ -309,10 +286,8 @@ class MCPToolLoader:
         )
 
         # Discover tools
-        tools = await self.connection_manager.discover_tools(name)
-
-        # Create collection
-        return ToolCollection.from_tools(tools)
+        toolcollection = await self.connection_manager.get_tools(name)
+        return toolcollection
 
     async def cleanup(self) -> None:
         """Disconnect from all servers"""
