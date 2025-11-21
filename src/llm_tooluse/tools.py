@@ -1,8 +1,13 @@
+"""
+MCP Tool Loader
+Factory for loading tools from MCP servers using the fastmcp connection manager.
+"""
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from loguru import logger
+
 from llm_tooluse.mcp_adapter import MCPToolReference
 
 from llm_tooluse.schemagenerators import (
@@ -198,12 +203,13 @@ class ToolCollection:
     def __getitem__(self, name: str) -> "MCPToolReference":
         return self._registry.get(name)
 
-    def __call__(self, tool: str, **kwargs) -> Any:
+    async def __call__(self, tool: str, **kwargs) -> Any:
         """Execute a tool from this collection"""
         if tool not in self:
             raise ValueError(f"Tool {tool} not in this collection")
         ref = self._registry.get(tool)
-        return ref(**kwargs)
+        logger.debug(f"Executing tool {tool} with args: {kwargs}")
+        return await ref(**kwargs)
 
     def __contains__(self, item: str) -> bool:
         """Check if a tool is in this collection"""
@@ -267,10 +273,10 @@ class ToolFactory:
 class MCPToolLoader:
     """
     Factory for loading tools from MCP servers.
-    Replaces the old ToolFactory.
     """
 
     def __init__(self, connection_manager=None):
+        # We no longer need to import or expose TransportType
         from llm_tooluse.mcp_client import MCPConnectionManager
 
         self.connection_manager = connection_manager or MCPConnectionManager()
@@ -278,24 +284,39 @@ class MCPToolLoader:
     async def load_server(
         self,
         name: str,
-        command: str,
-        args: Optional[List[str]] = None,
-        env: Optional[Dict[str, str]] = None
+        target: str,
     ) -> ToolCollection:
         """
         Connect to an MCP server and load its tools.
 
+        The 'target' argument automatically determines the transport:
+        - URLs (starting with http://) use SSE.
+        - File paths or commands use Stdio.
+
         Args:
-            name: Name for this server connection
-            command: Command to run the server
-            args: Command arguments
-            env: Environment variables
+            name: Unique name for this server connection
+            target: Connection string (e.g., 'http://localhost:8000', 'my_script.py', 'npx -y server-pkg')
+            env: Environment variables (optional, mostly for stdio connections)
 
         Returns:
             ToolCollection containing all tools from the server
+
+        Examples:
+            # Stdio (Local Python script)
+            await loader.load_server("calculator", target="calc_server.py")
+
+            # Stdio (Command)
+            await loader.load_server("filesystem", target="npx -y @modelcontextprotocol/server-filesystem")
+
+            # SSE (HTTP)
+            await loader.load_server("ml_tools", target="http://localhost:8000/sse")
         """
-        # Connect to server
-        await self.connection_manager.connect_server(name, command, args, env)
+
+        # Connect to server (ConnectionManager handles transport detection)
+        await self.connection_manager.connect_server(
+            name=name,
+            target=target,
+        )
 
         # Discover tools
         tools = await self.connection_manager.discover_tools(name)
