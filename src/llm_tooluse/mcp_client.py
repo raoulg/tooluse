@@ -2,13 +2,14 @@
 MCP Connection Manager (Refactored with fastmcp)
 Manages connections to multiple MCP servers and tool discovery.
 """
-import asyncio
-from typing import Any, Dict, List, Optional
 
-from loguru import logger
+from typing import Dict, List
+
 from fastmcp import Client  # The new high-level client
+from loguru import logger
 
-from llm_tooluse.mcp_adapter import MCPToolReference
+from llm_tooluse.tools import MCPToolReference, ToolCollection
+
 
 class MCPConnectionManager:
     """
@@ -19,6 +20,10 @@ class MCPConnectionManager:
     def __init__(self):
         # Stores active fastmcp.Client instances
         self._clients: Dict[str, Client] = {}
+
+    @property
+    def connected_servers(self) -> List[str]:
+        return list(self._clients.keys())
 
     async def connect_server(
         self,
@@ -45,7 +50,6 @@ class MCPConnectionManager:
 
             async with client:
                 await client.ping()
-
                 self._clients[name] = client
                 logger.info(f"Successfully connected to MCP server '{name}'")
 
@@ -53,9 +57,26 @@ class MCPConnectionManager:
             logger.error(f"Failed to connect to '{name}': {e}")
             raise e
 
-    async def discover_tools(self, server_name: str) -> List[MCPToolReference]:
+    async def list_tools(self, server_name: str) -> list[str]:
         """
-        Discover all tools available from a connected server.
+        List the names of tools available from a connected server.
+        """
+        if server_name not in self._clients:
+            raise ValueError(f"Server '{server_name}' is not connected")
+
+        client = self._clients[server_name]
+        async with client:
+            try:
+                tools = await client.list_tools()
+                tool_names = [tool.name for tool in tools]
+                return tool_names
+            except Exception as e:
+                logger.error(f"Error listing tools for '{server_name}': {e}")
+                raise e
+
+    async def get_tools(self, server_name: str) -> ToolCollection:
+        """
+        return all tools available from a connected server as a callable toolcollection
         """
         if server_name not in self._clients:
             raise ValueError(f"Server '{server_name}' is not connected")
@@ -65,7 +86,6 @@ class MCPConnectionManager:
         try:
             logger.debug(f"Discovering tools from server '{server_name}'")
             async with client:
-
                 tools_list = await client.list_tools()
 
                 tool_refs = []
@@ -74,12 +94,13 @@ class MCPConnectionManager:
                         name=tool.name,
                         description=tool.description or "",
                         input_schema=tool.inputSchema,
-                        _client=client  # Passing the high-level client
+                        _client=client,  # Passing the high-level client
                     )
                     tool_refs.append(tool_ref)
 
             logger.info(f"Discovered {len(tool_refs)} tools from '{server_name}'")
-            return tool_refs
+            toolcollection = ToolCollection.from_tools(tool_refs)
+            return toolcollection
 
         except Exception as e:
             logger.error(f"Error discovering tools for '{server_name}': {e}")
@@ -111,7 +132,3 @@ class MCPConnectionManager:
 
     def is_connected(self, name: str) -> bool:
         return name in self._clients
-
-    @property
-    def connected_servers(self) -> List[str]:
-        return list(self._clients.keys())
