@@ -1,13 +1,14 @@
-from llm_tooluse import ModelConfig, ClientType, LLMClient, MCPToolLoader
-from llm_tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
-from pathlib import Path
-from loguru import logger
-import sys
 import asyncio
+import sys
+from pathlib import Path
 
+from loguru import logger
+
+from llm_tooluse import ClientType, LLMClient, MCPToolLoader, ModelConfig
+from llm_tooluse.schemagenerators import AnthropicAdapter, LlamaAdapter
 
 logger.remove()
-logger.add(sys.stderr, level="DEBUG")
+logger.add(sys.stderr, level="INFO")
 
 
 async def main():
@@ -15,15 +16,13 @@ async def main():
     loader = MCPToolLoader()
     collection = await loader.load_server(
         name="db_server",
-        target=server_path,
+        target=str(server_path),
     )
     logger.info(f"Loaded tools: {collection}")
 
-    result = await collection("get_min_max_per_category",
-                              category="All",
-                              min_price=0,
-                              max_price=1000
-                              )
+    result = await collection(
+        "get_min_max_per_category", category="All", min_price=0, max_price=1000
+    )
     logger.info(f"Test call result: {result}")
 
     configfile = Path("config.toml").resolve()
@@ -43,7 +42,6 @@ async def main():
         "I am thinking about getting something nice for myself. I want to spend about 500,-. What combinations of products are available so i get to a total of 500,-?",
     ]
 
-
     adapter = AnthropicAdapter
     if config.client_type == ClientType.OLLAMA:
         adapter = LlamaAdapter
@@ -54,6 +52,7 @@ async def main():
         response = await llm(messages)
         content = adapter.get_content(response)
         logger.info(f"LLM response: \n{content}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
